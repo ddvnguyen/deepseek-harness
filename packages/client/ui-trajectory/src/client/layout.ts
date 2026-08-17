@@ -26,10 +26,21 @@ export interface TrajectoryGroupModel {
   cells: readonly TrajectoryCellProps[]
 }
 
+/** Disjoint provider token buckets for one turn. */
+export interface TrajectoryTurnUsage {
+  input?: number
+  cacheRead?: number
+  cacheWrite?: number
+  output?: number
+  think?: number
+}
+
 /** One sticky turn, or a standalone compaction section between turns. */
 export interface TrajectoryTurnModel {
   turn: number | null
   groups: readonly TrajectoryGroupModel[]
+  /** Aggregated token usage across all cells in the turn. */
+  usage?: TrajectoryTurnUsage
 }
 
 /** Snapshot slice the trajectory view folds. */
@@ -592,6 +603,21 @@ function attachToolSchema(
   laid.cell.schemaDetail = JSON.stringify(schema, null, 2)
 }
 
+function sumTurnUsage(groups: readonly TrajectoryGroupModel[]): TrajectoryTurnUsage | undefined {
+  const usage: TrajectoryTurnUsage = {}
+  let hasUsage = false
+  for (const group of groups) {
+    for (const cell of group.cells) {
+      if (cell.input !== undefined) { usage.input = (usage.input ?? 0) + cell.input; hasUsage = true }
+      if (cell.cacheRead !== undefined) { usage.cacheRead = (usage.cacheRead ?? 0) + cell.cacheRead; hasUsage = true }
+      if (cell.cacheWrite !== undefined) { usage.cacheWrite = (usage.cacheWrite ?? 0) + cell.cacheWrite; hasUsage = true }
+      if (cell.output !== undefined) { usage.output = (usage.output ?? 0) + cell.output; hasUsage = true }
+      if (cell.think !== undefined) { usage.think = (usage.think ?? 0) + cell.think; hasUsage = true }
+    }
+  }
+  return hasUsage ? usage : undefined
+}
+
 function toTurnModel(
   turn: number | null,
   entry: TurnBucket,
@@ -604,7 +630,8 @@ function toTurnModel(
       cells: laid.map(l => l.cell),
     }
   })
-  return { turn, groups }
+  const usage = sumTurnUsage(groups)
+  return { turn, groups, ...(usage !== undefined ? { usage } : {}) }
 }
 
 /** Chronological section position from the fold's monotonically assigned cell indexes. */

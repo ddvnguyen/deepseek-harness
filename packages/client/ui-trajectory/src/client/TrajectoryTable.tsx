@@ -24,7 +24,7 @@ import {
   groupTrajectoryVirtualRows, trajectoryVirtualRecordKey,
 } from './trajectory-virtual-rows.ts'
 import type { TrajectoryVirtualRow } from './trajectory-virtual-rows.ts'
-import type { TrajectoryTurnModel } from './layout.ts'
+import type { TrajectoryTurnModel, TrajectoryTurnUsage } from './layout.ts'
 import { trajectoryPreviewText } from './trajectory-preview.ts'
 import css from './TrajectoryTable.module.css'
 
@@ -1737,6 +1737,22 @@ export function TrajectoryTable({
     () => new Map(streamingCells.map(cell => [cell.index, cell])),
     [streamingCells],
   )
+  const turnUsageMap = useMemo(() => {
+    const map = new Map<number, TrajectoryTurnUsage>()
+    for (const turn of turns) {
+      if (turn.turn !== null && turn.usage !== undefined) {
+        map.set(turn.turn, turn.usage)
+      }
+    }
+    return map
+  }, [turns])
+  const formatTurnUsage = (usage: TrajectoryTurnUsage): string => {
+    const parts: string[] = []
+    if (usage.input !== undefined) parts.push(`↑${usage.input}`)
+    if (usage.output !== undefined) parts.push(`↓${usage.output}`)
+    if (usage.think !== undefined) parts.push(`🧠${usage.think}`)
+    return parts.join(' ')
+  }
   const currentRecord = useCallback((record: TableRecord): TableRecord => {
     const cell = streamingCellsByIndex.get(record.cell.index)
     return cell === undefined ? record : { ...record, cell }
@@ -2430,6 +2446,20 @@ export function TrajectoryTable({
                                   </span>
                                 </>
                               )}
+                            {record.turn !== null && (() => {
+                              const turnUsage = turnUsageMap.get(record.turn)
+                              if (turnUsage === undefined) return null
+                              const parts: string[] = []
+                              if (turnUsage.input !== undefined) parts.push(`↑${turnUsage.input}`)
+                              if (turnUsage.output !== undefined) parts.push(`↓${turnUsage.output}`)
+                              if (turnUsage.think !== undefined) parts.push(`🧠${turnUsage.think}`)
+                              if (parts.length === 0) return null
+                              return (
+                                <span className={css.turnUsage} aria-hidden="true">
+                                  {parts.join(' ')}
+                                </span>
+                              )
+                            })()}
                           </span>
                         )}
                         <div className={css.eventInner}>

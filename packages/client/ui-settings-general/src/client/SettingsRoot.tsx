@@ -1,14 +1,18 @@
 /**
- * Settings shell root: the sidebar-foot trigger row plus the centered modal
- * panel (figma 501:29947, 1080x700) with the section nav rail. The shell is
- * a pure composition face — every piece of text (trigger label, panel title,
- * close label, sections) arrives from registrants through slots; accessible
- * names resolve to that content (trigger: its own text; dialog:
- * aria-labelledby the title node; close: visually-hidden slot text). Modal
- * open state and the active section id are component-local viewing state;
- * the onboarding coordinator mounts exactly one ordered registrant while the
- * sessions-derived empty-Hero fact is active. Visible dialog chrome belongs
- * to the step, so a mounted-but-deciding step paints nothing here.
+ * Settings shell root: the sidebar-foot trigger row plus the settings panel
+ * with the section nav rail. The shell is a pure composition face — every
+ * piece of text (trigger label, panel title, close label, sections) arrives
+ * from registrants through slots; accessible names resolve to that content
+ * (trigger: its own text; dialog: aria-labelledby the title node; close:
+ * visually-hidden slot text). Modal open state and the active section id are
+ * component-local viewing state; the onboarding coordinator mounts exactly
+ * one ordered registrant while the sessions-derived empty-Hero fact is
+ * active. Visible dialog chrome belongs to the step, so a mounted-but-deciding
+ * step paints nothing here.
+ *
+ * Layout: mobile/tablet (<768px) renders a full-page panel with no mask or
+ * dialog chrome. Desktop (>=768px) renders a right-side slide-over panel
+ * with a mask backdrop; clicking outside the panel closes it.
  */
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import clsx from 'clsx'
@@ -36,9 +40,11 @@ type PanelProps = {
 }
 
 /**
- * The modal layer: full-viewport mask + centered panel. Close paths: the
- * header button, a mask click, and document-level Escape (mounted only while
- * open, so the listener lifetime is the panel's).
+ * The panel layer: full-viewport overlay with a slide-over panel. On desktop
+ * (>=768px) a mask backdrop and clickable dismiss area sit beside the panel;
+ * on mobile the panel fills the viewport. Close paths: the header button,
+ * clicking outside the panel (desktop mask/clickArea), and document-level
+ * Escape (mounted only while open, so the listener lifetime is the panel's).
  */
 function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelProps) {
   // Entries can unmount underneath the requested id, so the render-time
@@ -59,9 +65,16 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
   useEffect(() => { closeButton.current?.focus() }, [])
 
   return (
-    <div className={css.overlay} role="presentation">
-      <div className={css.mask} aria-hidden="true" onClick={onClose} />
-      <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <div className={css.overlay} role="presentation" onClick={onClose}>
+      <div className={css.mask} aria-hidden="true" />
+      <div className={css.clickArea} />
+      <div
+        className={css.panel}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => { e.stopPropagation() }}
+      >
         <nav className={css.nav}>
           <div className={css.navTitle} id={titleId}>{renderSlot('settings.header', {})}</div>
           <div className={css.navList}>

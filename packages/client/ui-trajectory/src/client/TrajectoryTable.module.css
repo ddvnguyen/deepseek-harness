@@ -430,6 +430,13 @@
   background: var(--trajectory-turn-accent);
 }
 
+.turnUsage {
+  margin-left: 6px;
+  font-size: 7px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
 .eventInner {
   display: flex;
   align-items: center;
