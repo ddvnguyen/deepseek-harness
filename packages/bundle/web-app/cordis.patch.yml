@@ -263,6 +263,11 @@
     - id: ui-settings-plugins
       name: '@deepseek-ai/dsh-client-ui-settings-plugins'
 
+    # Fleet settings: Sessions, Agents, Teams, Budgets, Policy sections
+    # in the DSH settings dialog (fleet-settings-integration #26).
+    - id: ui-fleet-settings
+      name: '@deepseek-ai/dsh-client-ui-fleet-settings'
+
     # Plan control: the composer plan seat over the plan projection + /plan channel.
     - id: ui-plan
       name: '@deepseek-ai/dsh-client-ui-plan'
