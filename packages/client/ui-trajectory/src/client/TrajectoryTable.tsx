@@ -24,7 +24,7 @@ import {
   groupTrajectoryVirtualRows, trajectoryVirtualRecordKey,
 } from './trajectory-virtual-rows.ts'
 import type { TrajectoryVirtualRow } from './trajectory-virtual-rows.ts'
-import type { TrajectoryTurnModel, TrajectoryTurnUsage } from './layout.ts'
+import type { TrajectoryTurnModel } from './layout.ts'
 import { trajectoryPreviewText } from './trajectory-preview.ts'
 import css from './TrajectoryTable.module.css'
 
@@ -355,6 +355,8 @@ export interface TrajectoryTableProps {
   timelineFocusIndexes?: ReadonlySet<number> | null
   /** Record indexes retained by the active live search, or null without a query. */
   searchMatchIndexes?: ReadonlySet<number> | null
+  /** Whether per-item token counts are visible. */
+  showItemTokens?: boolean
   /** Report the record currently selected in the local inspector. */
   onSelectedIndexChange?: (index: number | null) => void
   /** Report a direct user selection from a ledger row. */
@@ -1710,6 +1712,7 @@ export function TrajectoryTable({
   onToggleTurn,
   collapsedAssistants,
   onToggleAssistant,
+  showItemTokens = false,
   inspectCallId = null,
   onInspectApplied,
 }: TrajectoryTableProps) {
@@ -1737,22 +1740,6 @@ export function TrajectoryTable({
     () => new Map(streamingCells.map(cell => [cell.index, cell])),
     [streamingCells],
   )
-  const turnUsageMap = useMemo(() => {
-    const map = new Map<number, TrajectoryTurnUsage>()
-    for (const turn of turns) {
-      if (turn.turn !== null && turn.usage !== undefined) {
-        map.set(turn.turn, turn.usage)
-      }
-    }
-    return map
-  }, [turns])
-  const formatTurnUsage = (usage: TrajectoryTurnUsage): string => {
-    const parts: string[] = []
-    if (usage.input !== undefined) parts.push(`↑${usage.input}`)
-    if (usage.output !== undefined) parts.push(`↓${usage.output}`)
-    if (usage.think !== undefined) parts.push(`🧠${usage.think}`)
-    return parts.join(' ')
-  }
   const currentRecord = useCallback((record: TableRecord): TableRecord => {
     const cell = streamingCellsByIndex.get(record.cell.index)
     return cell === undefined ? record : { ...record, cell }
@@ -2241,6 +2228,7 @@ export function TrajectoryTable({
           <colgroup>
             <col className={css.eventColumn} />
             <col className={css.contentColumn} />
+            {showItemTokens && <col className={css.tokenColumn} />}
           </colgroup>
           <tbody>
             {hasOlderRecords && (
@@ -2249,7 +2237,7 @@ export function TrajectoryTable({
                 data-history-load=""
                 aria-rowindex={1}
               >
-                <td colSpan={2}>
+                <td colSpan={showItemTokens ? 3 : 2}>
                   <button
                     type="button"
                     className={css.historyLoadButton}
@@ -2278,7 +2266,7 @@ export function TrajectoryTable({
             {virtualTop > 0 && (
               <tr className={css.virtualSpacer} data-virtual-spacer="top" aria-hidden="true">
                 <td
-                  colSpan={2}
+                  colSpan={showItemTokens ? 3 : 2}
                   style={{
                     '--trajectory-virtual-spacer-height': `${virtualTop}px`,
                   } as VirtualSpacerStyle}
@@ -2446,20 +2434,6 @@ export function TrajectoryTable({
                                   </span>
                                 </>
                               )}
-                            {record.turn !== null && (() => {
-                              const turnUsage = turnUsageMap.get(record.turn)
-                              if (turnUsage === undefined) return null
-                              const parts: string[] = []
-                              if (turnUsage.input !== undefined) parts.push(`↑${turnUsage.input}`)
-                              if (turnUsage.output !== undefined) parts.push(`↓${turnUsage.output}`)
-                              if (turnUsage.think !== undefined) parts.push(`🧠${turnUsage.think}`)
-                              if (parts.length === 0) return null
-                              return (
-                                <span className={css.turnUsage} aria-hidden="true">
-                                  {parts.join(' ')}
-                                </span>
-                              )
-                            })()}
                           </span>
                         )}
                         <div className={css.eventInner}>
@@ -2539,6 +2513,40 @@ export function TrajectoryTable({
                               </span>
                             )}
                       </td>
+                      {showItemTokens && (
+                        <td className={css.tokenCell}>
+                          {(() => {
+                            if (isRequestOnly || isCollapsedSummary) return null
+                            const cell = record.cell
+                            if (cell.kind === 'message') {
+                              const input = cell.input ?? 0
+                              const cacheRead = cell.cacheRead ?? 0
+                              const output = cell.output ?? 0
+                              if (input === 0 && output === 0) return null
+                              return (
+                                <span className={css.tokenValue}>
+                                  token: In {input.toLocaleString()}({cacheRead.toLocaleString()}) / out {output.toLocaleString()}
+                                </span>
+                              )
+                            }
+                            if (cell.kind === 'system') {
+                              const len = cell.promptDetail !== undefined
+                                ? JSON.stringify(cell.promptDetail).length
+                                : 0
+                              return len > 0 ? <span className={css.tokenValue}>characters: {len.toLocaleString()}</span> : null
+                            }
+                            if (cell.kind === 'user' || cell.kind === 'context') {
+                              const len = cell.inputDetail?.length ?? 0
+                              return len > 0 ? <span className={css.tokenValue}>characters: {len.toLocaleString()}</span> : null
+                            }
+                            if (cell.kind === 'tool' || cell.kind === 'subtool') {
+                              const len = cell.outputDetail?.length ?? 0
+                              return len > 0 ? <span className={css.tokenValue}>characters: {len.toLocaleString()}</span> : null
+                            }
+                            return null
+                          })()}
+                        </td>
+                      )}
                     </tr>
                   )
                 }}
@@ -2547,7 +2555,7 @@ export function TrajectoryTable({
             {virtualBottom > 0 && (
               <tr className={css.virtualSpacer} data-virtual-spacer="bottom" aria-hidden="true">
                 <td
-                  colSpan={2}
+                  colSpan={showItemTokens ? 3 : 2}
                   style={{
                     '--trajectory-virtual-spacer-height': `${virtualBottom}px`,
                   } as VirtualSpacerStyle}

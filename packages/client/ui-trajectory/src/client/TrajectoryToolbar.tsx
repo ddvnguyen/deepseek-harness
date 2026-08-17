@@ -22,6 +22,10 @@ export interface TrajectoryToolbarProps {
   allAssistantsCollapsed: boolean
   /** Fold or expand tool calls under every collapsible assistant. */
   onToggleAllAssistants: () => void
+  /** Whether per-item token counts are visible. */
+  showItemTokens: boolean
+  /** Toggle per-item token display. */
+  onToggleItemTokens: () => void
   /** Current live ledger search query. */
   searchQuery: string
   /** Update the live ledger search query. */
@@ -44,6 +48,8 @@ export function TrajectoryToolbar({
   onToggleAllTurns,
   allAssistantsCollapsed,
   onToggleAllAssistants,
+  showItemTokens,
+  onToggleItemTokens,
   searchQuery,
   onSearchQueryChange,
   t,
@@ -109,6 +115,26 @@ export function TrajectoryToolbar({
               {allAssistantsCollapsed ? '⊞' : '⊟'}
             </span>
             {t('toolbar.calls')}
+          </button>
+          <button
+            type="button"
+            className={css.toggle}
+            aria-label={showItemTokens ? t('toolbar.hideTokens') : t('toolbar.showTokens')}
+            aria-pressed={showItemTokens}
+            title={showItemTokens ? t('toolbar.hideTokens') : t('toolbar.showTokens')}
+            onClick={() => { onToggleItemTokens() }}
+          >
+            <svg
+              className={css.toggleIcon}
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <rect x="2" y="3" width="12" height="2.5" rx="0.5" />
+              <rect x="2" y="6.75" width="8" height="2.5" rx="0.5" />
+              <rect x="2" y="10.5" width="10" height="2.5" rx="0.5" />
+            </svg>
+            {t('toolbar.tokens')}
           </button>
         </div>
         <div className={css.search}>

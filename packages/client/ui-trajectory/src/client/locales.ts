@@ -17,6 +17,9 @@ export type TrajectoryKey =
   | 'toolbar.calls'
   | 'toolbar.expandCalls'
   | 'toolbar.collapseCalls'
+  | 'toolbar.tokens'
+  | 'toolbar.showTokens'
+  | 'toolbar.hideTokens'
   | 'toolbar.search'
   | 'toolbar.searchPlaceholder'
 
@@ -41,6 +44,9 @@ export const zh: Record<TrajectoryKey, string> = {
   'toolbar.calls': 'Calls',
   'toolbar.expandCalls': 'Expand calls',
   'toolbar.collapseCalls': 'Collapse calls',
+  'toolbar.tokens': 'Tokens',
+  'toolbar.showTokens': 'Show per-item tokens',
+  'toolbar.hideTokens': 'Hide per-item tokens',
   'toolbar.search': '搜索轨迹',
   'toolbar.searchPlaceholder': '搜索',
 }
@@ -59,6 +65,9 @@ export const en: Record<TrajectoryKey, string> = {
   'toolbar.calls': 'Calls',
   'toolbar.expandCalls': 'Expand calls',
   'toolbar.collapseCalls': 'Collapse calls',
+  'toolbar.tokens': 'Tokens',
+  'toolbar.showTokens': 'Show per-item tokens',
+  'toolbar.hideTokens': 'Hide per-item tokens',
   'toolbar.search': 'Search trajectory',
   'toolbar.searchPlaceholder': 'Search',
 }

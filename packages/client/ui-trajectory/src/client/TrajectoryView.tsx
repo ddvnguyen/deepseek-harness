@@ -68,9 +68,11 @@ function partialStructureSignature(partial: ConversationSnapshot['partial']): st
 export interface TrajectoryViewInjected {
   hooks: {
     duration: SnapshotStore<boolean>
+    showItemTokens: SnapshotStore<boolean>
   }
   loadOlder: () => Promise<boolean>
   setActualDuration: (actualDuration: boolean) => void
+  setShowItemTokens: (showItemTokens: boolean) => void
 }
 
 interface UsageLike {
@@ -118,7 +120,7 @@ function addUsage(
 }
 
 export function TrajectoryView({
-  useSession, useDuration, loadOlder, setActualDuration,
+  useSession, useDuration, useShowItemTokens, loadOlder, setActualDuration, setShowItemTokens,
   inspect, onInspectDone, t,
 }: ConvViewProps & InjectFace<TrajectoryViewInjected> & PropsLocale<'trajectory'>) {
   const [collapsedTurns, setCollapsedTurns] = useState<ReadonlySet<number>>(EMPTY_TURN_IDS)
@@ -127,6 +129,7 @@ export function TrajectoryView({
   const [timelineSelection, setTimelineSelection] = useState<TrajectoryTimeRange | null>(null)
   const actualDuration = useDuration(value => value)
   const [actualTime, setActualTime] = useState(false)
+  const showItemTokens = useShowItemTokens(value => value)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex] = useState(() => new TrajectorySearchIndex())
   const [searchIndexRevision, setSearchIndexRevision] = useState(0)
@@ -460,6 +463,8 @@ export function TrajectoryView({
         onToggleAllTurns={toggleAllTurns}
         allAssistantsCollapsed={allAssistantsCollapsed}
         onToggleAllAssistants={toggleAllAssistants}
+        showItemTokens={showItemTokens}
+        onToggleItemTokens={() => { setShowItemTokens(!showItemTokens) }}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
         t={t}
@@ -483,6 +488,7 @@ export function TrajectoryView({
           streamingCells={streamingCells}
           timelineFocusIndexes={timelineFocusIndexes}
           searchMatchIndexes={searchMatchIndexes}
+          showItemTokens={showItemTokens}
           onSelectedIndexChange={setSelectedTimelineIndex}
           onRecordSelect={handleRecordSelect}
           recordSelection={timelineRecordSelection}

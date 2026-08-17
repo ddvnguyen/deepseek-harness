@@ -430,13 +430,6 @@
   background: var(--trajectory-turn-accent);
 }
 
-.turnUsage {
-  margin-left: 6px;
-  font-size: 7px;
-  color: var(--dsw-alias-label-secondary);
-  white-space: nowrap;
-}
-
 .eventInner {
   display: flex;
   align-items: center;
@@ -463,6 +456,24 @@
 .content {
   padding-left: 4px !important;
   color: var(--dsw-alias-label-primary);
+}
+
+.tokenColumn {
+  width: 260px;
+}
+
+.tokenCell {
+  box-sizing: border-box;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tokenValue {
+  font: 10px/14px var(--ds-font-family-code);
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .kindTag {
