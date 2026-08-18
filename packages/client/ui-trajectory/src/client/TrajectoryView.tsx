@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConvViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   AssistantBlock, AssistantMessageNode, ConversationSnapshot,
   SnapshotStore,
@@ -23,6 +23,7 @@ import {
   type TrajectoryTimelineMode,
   type TrajectoryTimeRange,
 } from './timeline.ts'
+import { readTrajectoryContextSummary } from './trajectory-context-slot.ts'
 import { trajectoryRecordId } from './trajectory-record.ts'
 import { TrajectorySearchIndex } from './trajectory-search-index.ts'
 import { EMPTY_TRAJECTORY_SNAPSHOT } from './trajectory-snapshot-builder.ts'
@@ -121,8 +122,10 @@ function addUsage(
 
 export function TrajectoryView({
   useSession, useDuration, useShowItemTokens, loadOlder, setActualDuration, setShowItemTokens,
+  useProjection, renderSlot,
   inspect, onInspectDone, t,
-}: ConvViewProps & InjectFace<TrajectoryViewInjected> & PropsLocale<'trajectory'>) {
+}: ConvViewProps & Partial<PropsRenderSlots<'trajectory.context.summary'>>
+  & InjectFace<TrajectoryViewInjected> & PropsLocale<'trajectory'>) {
   const [collapsedTurns, setCollapsedTurns] = useState<ReadonlySet<number>>(EMPTY_TURN_IDS)
   const [collapsedAssistants, setCollapsedAssistants] =
     useState<ReadonlySet<string>>(EMPTY_RECORD_IDS)
@@ -445,9 +448,13 @@ export function TrajectoryView({
   const loadEarlierHistory = useCallback(() => {
     return loadOlder()
   }, [loadOlder])
+  const contextSummary = readTrajectoryContextSummary(useProjection)
 
   return (
     <div className={css.root} data-conversation-composer-overlay="">
+      <div className={css.contextSummary}>
+        {renderSlot?.('trajectory.context.summary', contextSummary)}
+      </div>
       <TrajectoryToolbar
         actualDuration={actualDuration}
         onActualDurationChange={(nextActualDuration) => {

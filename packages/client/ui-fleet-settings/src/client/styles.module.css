@@ -233,3 +233,10 @@
 .copyBtnCopied {
   color: var(--dsw-alias-text-success);
 }
+
+.sessionId {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--dsw-alias-text-tertiary);
+  margin-right: 4px;
+}

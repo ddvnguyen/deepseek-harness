@@ -268,6 +268,15 @@
     - id: ui-fleet-settings
       name: '@deepseek-ai/dsh-client-ui-fleet-settings'
 
+    # Fleet sidebar: Scheduler + Orchestration slide-out panels.
+    - id: ui-fleet-sidebar
+      name: '@deepseek-ai/dsh-client-ui-fleet-sidebar'
+
+    # Fleet UI overrides: context stats line, hover context meter,
+    # trajectory context summary, header slimming.
+    - id: ui-fleet-ui-overrides
+      name: '@deepseek-ai/dsh-client-ui-fleet-ui-overrides'
+
     # Plan control: the composer plan seat over the plan projection + /plan channel.
     - id: ui-plan
       name: '@deepseek-ai/dsh-client-ui-plan'

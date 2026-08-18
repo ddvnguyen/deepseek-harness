@@ -241,6 +241,7 @@ function clientConfig(id: string, entry: string): UserConfig {
           code: source,
           cssModules: { pattern: '[hash]_[local]' },
           minify: true,
+          targets: {},
         })
         const classMap: Record<string, string> = {}
         for (const [local, exp] of Object.entries(cssExports ?? {})) classMap[local] = exp.name

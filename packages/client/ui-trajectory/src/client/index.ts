@@ -9,6 +9,10 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: the 'conversation.view' SlotMap row (declared by the slot's
 // owning package) must be in the program for the register calls to type.
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only re-export: publishes the 'trajectory.context.summary' SlotMap
+// declaration (and its owner share) on the package's client type surface, so
+// other packages can register into the hole.
+export type {} from './trajectory-context-slot.ts'
 import { createTrajectoryDurationStore } from './duration-store.ts'
 import { createTrajectoryTokenToggleStore } from './token-toggle-store.ts'
 import { en, NS, zh } from './locales.ts'
@@ -48,6 +52,9 @@ export function apply(ctx: Context): void {
     order: 10,
     locale: NS,
     label: () => t('view.trajectory'),
+    children: {
+      'trajectory.context.summary': { kind: 'list', scope: 'session' },
+    },
     inject: (sessionId: SessionId): TrajectoryViewInjected => {
       const session = ctx.sessions.binding(sessionId)?.session
       if (session === undefined) {

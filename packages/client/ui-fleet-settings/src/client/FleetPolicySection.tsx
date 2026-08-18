@@ -4,7 +4,7 @@ import css from './styles.module.css'
 
 /** Safe length accessor — handles both { policies: [] } and { rules: [] } shapes. */
 function policyCount(data: PolicyResponse): number {
-  const p = data as Record<string, unknown>
+  const p = data as unknown as Record<string, unknown>
   if (Array.isArray(p.policies)) return p.policies.length
   if (Array.isArray(p.rules)) return p.rules.length
   return 0
@@ -31,7 +31,7 @@ export function FleetPolicySection() {
   if (!data) return null
 
   const count = policyCount(data)
-  const raw = data as Record<string, unknown>
+  const raw = data as unknown as Record<string, unknown>
   const contextPosture = typeof raw.context === 'string' ? raw.context : 'N/A'
   const identities = (typeof raw.identities === 'object' && raw.identities !== null ? raw.identities : {}) as Record<string, string>
   const rules = Array.isArray(raw.rules) ? raw.rules as Array<Record<string, unknown>> : []

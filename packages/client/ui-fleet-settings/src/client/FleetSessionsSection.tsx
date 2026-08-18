@@ -10,6 +10,10 @@ function statusBadge(status: SessionRow['status']) {
   return <span className={`${css.badge} ${cls}`}>{status}</span>
 }
 
+function copyId(id: string) {
+  void navigator.clipboard.writeText(id)
+}
+
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
@@ -57,6 +61,7 @@ export function FleetSessionsSection() {
               <th>Title</th>
               <th>Status</th>
               <th>Agent</th>
+              <th>Session ID</th>
               <th>Updated</th>
               <th>Actions</th>
             </tr>
@@ -67,6 +72,14 @@ export function FleetSessionsSection() {
                 <td>{s.title || s.id.slice(0, 8)}</td>
                 <td>{statusBadge(s.status)}</td>
                 <td>{s.agentPreset || '-'}</td>
+                <td>
+                  <span className={css.sessionId} title={s.id}>
+                    {s.id.slice(0, 8)}
+                  </span>
+                  <button type="button" className={css.copyBtn} title="Copy session ID" onClick={() => copyId(s.id)}>
+                    📋
+                  </button>
+                </td>
                 <td>{timeAgo(s.updatedAt)}</td>
                 <td>
                   <div className={css.actions}>

@@ -136,6 +136,16 @@ function standaloneDuration(): Pick<
   }
 }
 
+function standaloneShowItemTokens(): Pick<
+  ComponentProps<typeof TrajectoryView>, 'useShowItemTokens' | 'setShowItemTokens'
+> {
+  const show = createSnapshotStore(false)
+  return {
+    useShowItemTokens: bindSnapshotSelector(show),
+    setShowItemTokens: (value) => { show.set(value) },
+  }
+}
+
 function fakeSession(nodes: ConversationSnapshot['nodes']) {
   const store = createSnapshotStore(historySnapshot(nodes))
   return { store, useSession: bindSnapshotSelector(store) }
@@ -248,6 +258,8 @@ function mount(slots: SlotRegistry, nodes: ConversationSnapshot['nodes'] = NODES
           loadOlder: trajectory.loadOlder,
           setActualDuration: trajectory.setActualDuration,
           useDuration: bindSnapshotSelector(trajectory.hooks.duration),
+          setShowItemTokens: trajectory.setShowItemTokens,
+          useShowItemTokens: bindSnapshotSelector(trajectory.hooks.showItemTokens),
           t: (key: TrajectoryKey) => zh[key],
         }
       })()
@@ -1127,6 +1139,7 @@ describe('timeline projection', () => {
         ...standaloneProps([]),
         ...standaloneHistory(historySnapshot([])),
         ...standaloneDuration(),
+        ...standaloneShowItemTokens(),
       },
     ))
     expect(screen.getByRole('toolbar', { name: '轨迹工具栏' })).toBeTruthy()
@@ -1140,6 +1153,7 @@ describe('TrajectoryView state', () => {
     const commonProps = {
       ...standaloneProps(NODES),
       ...standaloneHistory(historySnapshot(NODES)),
+      ...standaloneShowItemTokens(),
     }
     const first = render(
       <TrajectoryView
@@ -1183,6 +1197,7 @@ describe('TrajectoryView state', () => {
       <TrajectoryView
         {...standaloneProps([])}
         {...standaloneDuration()}
+        {...standaloneShowItemTokens()}
         useSession={bindSnapshotSelector(store)}
         loadOlder={vi.fn(() => Promise.resolve(false))}
       />,
