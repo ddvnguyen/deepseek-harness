@@ -19,6 +19,16 @@ export interface TrajectoryContextSummaryOwnerProps {
     projectedTokens?: number
     contextWindow?: number
   }
+  breakdown?: {
+    systemTokens: number
+    toolsTokens: number
+    messageTokens: number
+  }
+  stats?: {
+    turns: number
+    steps: number
+    llmMs: number
+  }
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -57,6 +67,18 @@ interface ContextPressureProjectionFace {
   contextWindow?: number
 }
 
+interface ContextBreakdownProjectionFace {
+  systemTokens: number
+  toolsTokens: number
+  messageTokens: number
+}
+
+interface SessionStatsProjectionFace {
+  turns: number
+  steps: number
+  llmMs: number
+}
+
 /**
  * Read the trajectory context summary the TrajectoryView renders: the durable
  * token-usage and context-pressure session projections through the standard
@@ -75,6 +97,8 @@ export function readTrajectoryContextSummary(
   const read: (key: string) => unknown = useProjection
   const usage = read('tokenUsage') as TokenUsageProjectionFace | undefined
   const pressure = read('contextPressure') as ContextPressureProjectionFace | undefined
+  const breakdown = read('contextBreakdown') as ContextBreakdownProjectionFace | undefined
+  const stats = read('sessionStats') as SessionStatsProjectionFace | undefined
   return {
     ...(usage === undefined
       ? {}
@@ -94,6 +118,24 @@ export function readTrajectoryContextSummary(
             ? {}
             : { projectedTokens: pressure.projectedTokens ?? pressure.pressureTokens }),
           ...(pressure.contextWindow === undefined ? {} : { contextWindow: pressure.contextWindow }),
+        },
+      }),
+    ...(breakdown === undefined
+      ? {}
+      : {
+        breakdown: {
+          systemTokens: breakdown.systemTokens,
+          toolsTokens: breakdown.toolsTokens,
+          messageTokens: breakdown.messageTokens,
+        },
+      }),
+    ...(stats === undefined
+      ? {}
+      : {
+        stats: {
+          turns: stats.turns,
+          steps: stats.steps,
+          llmMs: stats.llmMs,
         },
       }),
   }

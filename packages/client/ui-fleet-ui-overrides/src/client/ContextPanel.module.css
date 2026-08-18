@@ -1,0 +1,124 @@
+/* Context summary panel for the Trajectory view — compact inline layout */
+
+.contextPanel {
+  position: relative;
+  padding: 6px 8px 6px 24px;
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.contextHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.contextLabel {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.contextPercent {
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.contextFigures {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.contextBar {
+  display: flex;
+  gap: 1px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  overflow: hidden;
+  margin: 4px 0;
+}
+
+.contextSegment {
+  flex: none;
+  min-width: 1px;
+  height: 100%;
+  border-radius: 1px;
+}
+
+.contextRows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+
+.contextRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.contextDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--dsw-alias-label-tertiary);
+  flex-shrink: 0;
+}
+
+.contextValue {
+  margin-left: auto;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.contextCache {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.contextFooter {
+  display: inline-flex;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.contextClose {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.contextClose:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.colorSystem {
+  background: var(--dsw-static-neutral-bluish-400);
+}
+
+.colorTools {
+  background: rgb(167, 139, 250);
+}
+
+.colorMessages {
+  background: var(--dsw-static-blue-450);
+}

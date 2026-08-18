@@ -1,23 +1,14 @@
 /**
- * ContextSummaryRow — sticky trajectory header row, registered into the
- * `trajectory.context.summary` slot (declared by DSH's ui-trajectory). The
- * TrajectoryView owner reads the durable token-usage and context-pressure
- * projections and passes them through the owner share; this row renders them
- * pinned at the top of the Trajectory view:
- *
- *   `Context: 135K / 300K (45%) │ Input: 2.8M (96% cache) │ Output: 21.8K`
- *
- * Consuming the owner share (not the projections directly) keeps the row a
- * pure presentation of what TrajectoryView already resolved, and keeps it
- * decoupled from the projection-wire types.
+ * ContextSummaryRow — compact context panel below the Trajectory toolbar.
+ * Shows context usage, token breakdown, and session stats.
  * @module @hydra/dsh-fleet-ui-overrides/client
  */
 
-import { Fragment, memo } from 'react'
-import { formatTokens } from './FleetStatsLine.tsx'
-import css from './styles.module.css'
+import { memo } from 'react'
+import { formatTokens, formatDuration } from './FleetStatsLine.tsx'
+import css from './ContextPanel.module.css'
 
-/** Whole-log billed usage share (billed input is the total across buckets). */
+/** Whole-log billed usage share. */
 export interface TrajectoryUsageShare {
   inputTokens?: number
   cacheReadTokens?: number
@@ -31,59 +22,125 @@ export interface TrajectoryPressureShare {
   contextWindow?: number
 }
 
-/** Props: the trajectory owner's summary share (framework kit not required). */
+/** Context breakdown (system/tools/messages). */
+export interface TrajectoryBreakdownShare {
+  systemTokens: number
+  toolsTokens: number
+  messageTokens: number
+}
+
+/** Session stats (turns/steps/time). */
+export interface TrajectoryStatsShare {
+  turns: number
+  steps: number
+  llmMs: number
+}
+
+/** Props from the trajectory owner's summary share. */
 export interface ContextSummaryRowProps {
-  /** Whole-log billed usage supplied by the TrajectoryView. */
   usage?: TrajectoryUsageShare
-  /** Approximate context occupancy supplied by the TrajectoryView. */
   pressure?: TrajectoryPressureShare
+  breakdown?: TrajectoryBreakdownShare
+  stats?: TrajectoryStatsShare
 }
 
-/** Cache-hit share of billed input, rounded to whole percent; null when input is 0/absent. */
-function cacheHitPercent(usage: TrajectoryUsageShare): number | null {
-  const input = usage.inputTokens ?? 0
-  const cacheRead = usage.cacheReadTokens ?? 0
-  return input <= 0 ? null : Math.round(cacheRead / input * 100)
-}
-
-/**
- * Summary row for the trajectory header. Groups drop out whole when their
- * source is absent; the row hides entirely while neither usage nor pressure
- * has been reported.
- */
 export const ContextSummaryRow = memo(function ContextSummaryRow(
-  { usage, pressure }: ContextSummaryRowProps,
+  { usage, pressure, breakdown, stats }: ContextSummaryRowProps,
 ) {
   const used = pressure?.projectedTokens
   const windowSize = pressure?.contextWindow
   const billedInput = usage?.inputTokens ?? 0
+  const cacheRead = usage?.cacheReadTokens ?? 0
   const output = usage?.outputTokens ?? 0
+
   if (used === undefined && windowSize === undefined && billedInput <= 0 && output <= 0) return null
 
-  const cells: string[] = []
-  if (used !== undefined && windowSize !== undefined) {
-    const percent = Math.min(100, Math.round(used / windowSize * 100))
-    cells.push(
-      `Context: ${formatTokens(used)} / ${formatTokens(windowSize)} (${percent}%)`,
-    )
-  }
-  if (usage !== undefined && (billedInput > 0 || output > 0)) {
-    const cacheHit = cacheHitPercent(usage)
-    cells.push(
-      `Input: ${formatTokens(billedInput)}${cacheHit !== null ? ` (${cacheHit}% cache)` : ''}`,
-    )
-    cells.push(`Output: ${formatTokens(output)}`)
-  }
-  if (cells.length === 0) return null
+  const percent = (used !== undefined && windowSize !== undefined)
+    ? Math.min(100, Math.round(used / windowSize * 100))
+    : null
+
+  // Breakdown bar: each segment is proportional to its share of context used
+  const breakdownTotal = breakdown === undefined
+    ? 0
+    : breakdown.systemTokens + breakdown.toolsTokens + breakdown.messageTokens
+  const hasBreakdown = breakdown !== undefined && breakdownTotal > 0 && used !== undefined
 
   return (
-    <div className={css.contextSummaryRow} data-trajectory-context-summary>
-      {cells.map((cell, i) => (
-        <Fragment key={cell}>
-          {i > 0 && <span className={css.cellSep} aria-hidden>│</span>}
-          <span className={css.cell}>{cell}</span>
-        </Fragment>
-      ))}
+    <div className={css.contextPanel} data-trajectory-context-summary>
+      {/* Header: Context 11% — 22.4K / 200K */}
+      <div className={css.contextHeader}>
+        <span className={css.contextLabel}>Context</span>
+        {percent !== null && <span className={css.contextPercent}>{percent}%</span>}
+        {used !== undefined && windowSize !== undefined && (
+          <span className={css.contextFigures}>{formatTokens(used)} / {formatTokens(windowSize)}</span>
+        )}
+      </div>
+
+      {/* Breakdown bar */}
+      {hasBreakdown && (
+        <div className={css.contextBar}>
+          <div
+            className={`${css.contextSegment} ${css.colorSystem}`}
+            style={{ width: `${used! > 0 ? breakdown!.systemTokens / used! * 100 : 0}%` }}
+          />
+          <div
+            className={`${css.contextSegment} ${css.colorTools}`}
+            style={{ width: `${used! > 0 ? breakdown!.toolsTokens / used! * 100 : 0}%` }}
+          />
+          <div
+            className={`${css.contextSegment} ${css.colorMessages}`}
+            style={{ width: `${used! > 0 ? breakdown!.messageTokens / used! * 100 : 0}%` }}
+          />
+        </div>
+      )}
+
+      {/* Token rows — compact inline layout */}
+      <div className={css.contextRows}>
+        {billedInput > 0 && (
+          <div className={css.contextRow}>
+            <span className={css.contextDot} />
+            <span>Input</span>
+            <span className={css.contextValue}>
+              {formatTokens(billedInput)}
+              {cacheRead > 0 && <span className={css.contextCache}> ({formatTokens(cacheRead)} cached)</span>}
+            </span>
+          </div>
+        )}
+        {output > 0 && (
+          <div className={css.contextRow}>
+            <span className={css.contextDot} />
+            <span>Output</span>
+            <span className={css.contextValue}>{formatTokens(output)}</span>
+          </div>
+        )}
+        {hasBreakdown && (
+          <>
+            <div className={css.contextRow}>
+              <span className={`${css.contextDot} ${css.colorSystem}`} />
+              <span>System prompt</span>
+              <span className={css.contextValue}>~{formatTokens(breakdown!.systemTokens)}</span>
+            </div>
+            <div className={css.contextRow}>
+              <span className={`${css.contextDot} ${css.colorTools}`} />
+              <span>Tools</span>
+              <span className={css.contextValue}>~{formatTokens(breakdown!.toolsTokens)}</span>
+            </div>
+            <div className={css.contextRow}>
+              <span className={`${css.contextDot} ${css.colorMessages}`} />
+              <span>Messages</span>
+              <span className={css.contextValue}>~{formatTokens(breakdown!.messageTokens)}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Stats footer */}
+      {stats !== undefined && (
+        <div className={css.contextFooter}>
+          <span>{stats.turns} {stats.turns === 1 ? 'turn' : 'turns'} · {stats.steps} {stats.steps === 1 ? 'step' : 'steps'}</span>
+          {stats.llmMs > 0 && <span>LLM {formatDuration(stats.llmMs)}</span>}
+        </div>
+      )}
     </div>
   )
 })

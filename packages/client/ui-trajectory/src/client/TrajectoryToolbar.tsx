@@ -26,6 +26,10 @@ export interface TrajectoryToolbarProps {
   showItemTokens: boolean
   /** Toggle per-item token display. */
   onToggleItemTokens: () => void
+  /** Whether the context panel is visible. */
+  showContext: boolean
+  /** Toggle context panel visibility. */
+  onToggleContext: () => void
   /** Current live ledger search query. */
   searchQuery: string
   /** Update the live ledger search query. */
@@ -50,6 +54,8 @@ export function TrajectoryToolbar({
   onToggleAllAssistants,
   showItemTokens,
   onToggleItemTokens,
+  showContext,
+  onToggleContext,
   searchQuery,
   onSearchQueryChange,
   t,
@@ -135,6 +141,25 @@ export function TrajectoryToolbar({
               <rect x="2" y="10.5" width="10" height="2.5" rx="0.5" />
             </svg>
             {t('toolbar.tokens')}
+          </button>
+          <button
+            type="button"
+            className={css.toggle}
+            aria-label="Toggle context panel"
+            aria-pressed={showContext}
+            title={showContext ? 'Hide context' : 'Show context'}
+            onClick={onToggleContext}
+          >
+            <svg
+              className={css.toggleIcon}
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="5.5" />
+              <path d="M8 4.75V8l2.25 1.5" />
+            </svg>
+            Context
           </button>
         </div>
         <div className={css.search}>

@@ -134,6 +134,7 @@ export function TrajectoryView({
   const [actualTime, setActualTime] = useState(false)
   const showItemTokens = useShowItemTokens(value => value)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showContext, setShowContext] = useState(true)
   const [searchIndex] = useState(() => new TrajectorySearchIndex())
   const [searchIndexRevision, setSearchIndexRevision] = useState(0)
   const searchIndexTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -452,9 +453,22 @@ export function TrajectoryView({
 
   return (
     <div className={css.root} data-conversation-composer-overlay="">
-      <div className={css.contextSummary}>
-        {renderSlot?.('trajectory.context.summary', contextSummary)}
-      </div>
+      <button
+        type="button"
+        aria-label="Close trajectory"
+        title="Back to Chat"
+        onClick={() => { window.dispatchEvent(new CustomEvent('fleet:close-trajectory')) }}
+        style={{
+          position: 'absolute', top: 4, left: 4, zIndex: 10,
+          width: 24, height: 24, border: 'none', borderRadius: 4,
+          background: 'var(--dsw-alias-interactive-bg-hover)',
+          color: 'var(--dsw-alias-label-secondary)',
+          cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        ✕
+      </button>
       <TrajectoryToolbar
         actualDuration={actualDuration}
         onActualDurationChange={(nextActualDuration) => {
@@ -472,10 +486,17 @@ export function TrajectoryView({
         onToggleAllAssistants={toggleAllAssistants}
         showItemTokens={showItemTokens}
         onToggleItemTokens={() => { setShowItemTokens(!showItemTokens) }}
+        showContext={showContext}
+        onToggleContext={() => { setShowContext(!showContext) }}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
         t={t}
       />
+      {showContext && (
+        <div className={css.contextSummary}>
+          {renderSlot?.('trajectory.context.summary', contextSummary)}
+        </div>
+      )}
       <TrajectoryTimeline
         turns={timelineTurns}
         mode={timelineMode}

@@ -156,7 +156,7 @@ export const FleetStatsLine = memo(function FleetStatsLine(
   const occupancy = contextOccupancy(pressure)
   if (occupancy !== null) {
     groups.push(
-      `Context: ${occupancy.percent}% (${formatTokens(occupancy.usedTokens)}/${formatTokens(occupancy.contextWindow)})`,
+      `Context: ${formatTokens(occupancy.usedTokens)} (${occupancy.percent}%)`,
     )
   }
   if (usage !== undefined

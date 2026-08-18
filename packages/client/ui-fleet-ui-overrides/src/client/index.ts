@@ -46,6 +46,60 @@ export const inject = ['slots']
  * 0 is kept on the stats entry to preserve the shipped cell's display slot.
  */
 export function apply(ctx: ClientContext): void {
+  // Listen for click-to-Trajectory from the context ring. The tab bar is
+  // hidden via CSS but the buttons remain in the DOM — clicking one calls
+  // actions.setView('trajectory') through its onClick handler.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('fleet:open-trajectory', () => {
+      const tabs = document.querySelectorAll('[role="tab"]')
+      for (const tab of tabs) {
+        if (tab.textContent?.toLowerCase().includes('trajectory')) {
+          (tab as HTMLElement).click()
+          break
+        }
+      }
+    })
+    window.addEventListener('fleet:close-trajectory', () => {
+      const tabs = document.querySelectorAll('[role="tab"]')
+      for (const tab of tabs) {
+        if (tab.textContent?.toLowerCase().includes('chat')) {
+          (tab as HTMLElement).click()
+          break
+        }
+      }
+    })
+  }
+
+  // Hide the original DSH ContextMeter and reposition ours.
+  // The original is hardcoded in InputBar after the model selector; our
+  // FleetContextMeter is in the rightItems slot (before the model selector).
+  // Move our meter to after the model selector to match the original position.
+  if (typeof window !== 'undefined') {
+    const positionMeter = () => {
+      // Find our meter
+      const fleetMeter = document.querySelector('[data-fleet-meter]')
+      if (!fleetMeter) return
+      const trailing = fleetMeter.closest('[class*="trailing"]')
+      if (!trailing) return
+      // Find the original ContextMeter and hide it
+      const spans = trailing.querySelectorAll(':scope > span')
+      for (const span of spans) {
+        if (span !== fleetMeter && span.querySelector('button > svg circle')) {
+          ;(span as HTMLElement).style.display = 'none'
+        }
+      }
+      // Move our meter to after the model selector (second-to-last before stop button)
+      const children = Array.from(trailing.children)
+      const lastChild = children[children.length - 1]
+      if (lastChild && fleetMeter.nextElementSibling !== lastChild) {
+        trailing.insertBefore(fleetMeter, lastChild)
+      }
+    }
+    const observer = new MutationObserver(positionMeter)
+    observer.observe(document.body, { childList: true, subtree: true })
+    positionMeter()
+  }
+
   // Override StatsLine (same cell id 'stats'; this entry wins the cell).
   ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
     name: 'conversation.composer.dock',

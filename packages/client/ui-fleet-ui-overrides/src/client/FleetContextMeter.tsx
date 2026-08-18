@@ -95,7 +95,7 @@ export function FleetContextMeter({ useProjection, t }: FleetContextMeterProps) 
   const segments = parts.filter(part => part.width > 0)
 
   return (
-    <span className={css.root}>
+    <span className={css.root} data-fleet-meter>
       <button
         type="button"
         className={css.trigger}
@@ -104,6 +104,10 @@ export function FleetContextMeter({ useProjection, t }: FleetContextMeterProps) 
         aria-expanded={open}
         onMouseEnter={() => { setOpen(true) }}
         onMouseLeave={() => { setOpen(false) }}
+        onClick={() => {
+          // Dispatch custom event to open Trajectory view
+          window.dispatchEvent(new CustomEvent('fleet:open-trajectory'))
+        }}
       >
         <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden>
           <circle className={css.track} cx="7" cy="7" r={RADIUS} />
