@@ -71,6 +71,11 @@ describe('ui-sidebar apply', () => {
     expect(b.slots.spec('sidebar.settings')).toEqual({ kind: 'single', scope: 'root' })
     expect(b.slots.spec('sidebar.footer.action')).toEqual({ kind: 'list', scope: 'root' })
     expect(b.slots.spec('sidebar.panellist')).toEqual({ kind: 'list', scope: 'root' })
+    // Additive seat: the shell declares it (a render site may only name a
+    // declared child) but registers no entry of its own, so it stays empty and
+    // renders nothing until a registrant contributes to it.
+    expect(b.slots.spec('sidebar.sections')).toEqual({ kind: 'list', scope: 'root' })
+    expect(b.slots.entries('sidebar.sections')).toEqual([])
     // Copy rides the standard locale seat, not the inject face.
     expect(b.slots.entries('sidebar')[0]!.locale).toBe('sidebar')
     // The window-chrome occupant reuses the shell's inject face and locale.
@@ -152,6 +157,7 @@ describe('ui-sidebar apply', () => {
     expect(b.slots.spec('sidebar.brand.name')).toBeUndefined()
     expect(b.slots.spec('sidebar.workspaces')).toBeUndefined()
     expect(b.slots.spec('sidebar.footer.action')).toBeUndefined()
+    expect(b.slots.spec('sidebar.sections')).toBeUndefined()
     expect(b.slots.spec('sidebar.panellist')).toBeUndefined()
     expect(b.slots.entries('main')).toHaveLength(0)
   })

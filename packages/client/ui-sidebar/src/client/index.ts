@@ -17,7 +17,7 @@ import { en, zh, type SidebarKey } from './locales.ts'
 
 export type {
   SidebarBrandMarkOwnerProps, SidebarBrandNameOwnerProps, SidebarFooterActionOwnerProps,
-  SidebarPanelIconOwnerProps, SidebarPanelMetadata,
+  SidebarPanelIconOwnerProps, SidebarPanelMetadata, SidebarSectionsOwnerProps,
   SidebarRootComponentProps, SidebarRootInjected, SidebarSectionOwnerProps, SidebarSettingsOwnerProps,
 } from './contract/slots.ts'
 export type { SidebarKey } from './locales.ts'
@@ -82,6 +82,11 @@ export function apply(ctx: ClientContext): void {
       'sidebar.toggle.badge': { kind: 'single', scope: 'root' },
       'sidebar.panellist': { kind: 'list', scope: 'root' },
       'sidebar.workspaces': { kind: 'single', scope: 'root' },
+      // Additive: any package may register rows here without displacing the
+      // browsing region above. The shell declares the seat (declaring is
+      // claiming) but registers no entry of its own, so the seat stays empty
+      // and renders nothing until a registrant appears.
+      'sidebar.sections': { kind: 'list', scope: 'root' },
       'sidebar.settings': { kind: 'single', scope: 'root' },
       'sidebar.footer.action': { kind: 'list', scope: 'root' },
     },
