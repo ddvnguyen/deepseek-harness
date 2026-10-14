@@ -7,7 +7,7 @@ import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ReactNode } from 'react'
 import type {
-  SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
+  SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps, SidebarSectionsOwnerProps,
   SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { HeaderLeadingControls, type HeaderLeadingControlsProps } from '../src/client/HeaderLeadingControls.tsx'
@@ -43,6 +43,7 @@ function mountShell({ collapsed = false, width = 300, shortcuts = [] }: {
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
+  let sectionsOwner: SidebarSectionsOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
   const brandMark = <span data-testid="custom-brand-mark">M</span>
@@ -62,6 +63,10 @@ function mountShell({ collapsed = false, width = 300, shortcuts = [] }: {
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.toggle.badge') return null
+        if (key === 'sidebar.sections') {
+          sectionsOwner = owner as SidebarSectionsOwnerProps
+          return <div data-testid="sections-seat" data-wide={owner.wide} />
+        }
         if (key === 'sidebar.settings') {
           settingsOwner = owner
           return <div data-testid="settings-seat" data-wide={owner.wide} />
@@ -82,6 +87,10 @@ function mountShell({ collapsed = false, width = 300, shortcuts = [] }: {
     regionOwner: () => {
       if (regionOwner === undefined) throw new Error('region owner not rendered')
       return regionOwner
+    },
+    sectionsOwner: () => {
+      if (sectionsOwner === undefined) throw new Error('sections owner not rendered')
+      return sectionsOwner
     },
     settingsOwner: () => {
       if (settingsOwner === undefined) throw new Error('settings owner not rendered')
@@ -210,6 +219,25 @@ describe('SidebarRoot shell', () => {
     expect(screen.getByTestId('region')).toBeTruthy()
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
+  })
+
+  it('stacks the additive section seat above the browsing region', () => {
+    const b = mountShell()
+    const sections = screen.getByTestId('sections-seat')
+    const region = screen.getByTestId('region')
+    // Same DOM order as the render site: sections first, then the browser.
+    expect(sections.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The seat shares the browsing region's wide flag.
+    expect(b.sectionsOwner().wide).toBe(true)
+    expect(b.regionOwner().wide).toBe(true)
+  })
+
+  it('renders nothing for the section seat when no package contributes to it', () => {
+    // The renderer answers null for an empty seat (no entries -> no content),
+    // which is exactly what a registrant-free sidebar.sections produces.
+    const b = mountShell()
+    expect(screen.queryByTestId('sections-seat')).not.toBeNull()
+    expect(b.sectionsOwner().wide).toBe(true)
   })
 
   it('renders statically collapsed on a cold start (no crossfade classes)', () => {

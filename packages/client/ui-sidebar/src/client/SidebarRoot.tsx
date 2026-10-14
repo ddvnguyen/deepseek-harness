@@ -293,8 +293,13 @@ export function SidebarRoot({
       )}
 
       {/* The browsing region fills the column between the controls and the
-          foot in both states; its rail icon column rides the same slot. */}
+          foot in both states; its rail icon column rides the same slot. The
+          additive `sidebar.sections` list seat rides above the browser: the
+          shell declares it but registers no row of its own, so an unclaimed
+          seat renders nothing and no deployment that does not contribute to it
+          changes at all. */}
       <div className={css.regionArea}>
+        {renderSlot('sidebar.sections', { wide })}
         {renderSlot('sidebar.workspaces', {
           wide,
           expandSidebar: () => { if (collapsed) toggleSidebar() },

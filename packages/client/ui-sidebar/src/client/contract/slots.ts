@@ -51,6 +51,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * package's 'sidebar' entry; each action receives only the column state.
      */
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
+    /**
+     * Additive extra sections rendered inside the browsing region, above the
+     * `sidebar.workspaces` browser: a root-scoped ordered list seat any plugin
+     * may contribute rows to without displacing the shipped Workspace/Session
+     * browser that owns the single `sidebar.workspaces` seat. Declared by this
+     * package's 'sidebar' entry, which registers no entry of its own — an
+     * unclaimed seat renders nothing. Each occupant receives only the column
+     * state, exactly like the foot actions.
+     */
+    'sidebar.sections': { kind: 'list'; scope: 'root'; owner: SidebarSectionsOwnerProps }
   }
 }
 
@@ -110,6 +120,12 @@ export interface SidebarFooterActionOwnerProps {
   wide: boolean
 }
 
+/** Owner share of one extra section rendered in the browsing region. */
+export interface SidebarSectionsOwnerProps {
+  /** Whether the sidebar renders wide content (false = 56px rail). */
+  wide: boolean
+}
+
 /**
  * Registrant-private injected share (arrives via the register inject
  * factory). The renderer binds the panel metadata source to usePanels.
@@ -142,6 +158,7 @@ export type SidebarRootComponentProps =
     | 'sidebar.toggle.badge'
     | 'sidebar.panellist'
     | 'sidebar.workspaces'
+    | 'sidebar.sections'
     | 'sidebar.settings'
     | 'sidebar.footer.action'
   >
