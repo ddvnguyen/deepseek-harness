@@ -959,3 +959,53 @@ describe('connection node half over a real HTTP server', () => {
     }
   })
 })
+
+// dsh#02 fork opt-in. Stock behavior (the default) is pinned first, so these
+// double as the mutation check for the flag: with `fork.noAuth` off, a request
+// with no token and no cookie is refused exactly as on upstream alpha.5.
+describe('connection node half: fork.noAuth (dsh#02)', () => {
+  const trusted = { trustedHosts: ['harness.example'] }
+
+  it('stays stock by default: no token or cookie means 401 on the index and the API', async () => {
+    for (const config of [trusted, { ...trusted, fork: { noAuth: false } }]) {
+      const { connection, dispose } = await mounted(config)
+      const index = fakeResponse()
+      expect(connection.authorizeIndex(fakeRequest({ host: 'harness.example' }, '/'), index.response)).toBe(false)
+      expect(index.state.status).toBe(401)
+      expect(connection.admit(fakeRequest({ host: 'harness.example' }))).toEqual({ rejection: 401 })
+      expect(connection.admit(fakeRequest({ host: '127.0.0.1:3080' }))).toEqual({ rejection: 401 })
+      await dispose()
+    }
+  })
+
+  it('serves the index and admits the owner Peer to a trusted Host with no token or cookie', async () => {
+    const { connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
+    for (const host of ['harness.example', '127.0.0.1:3080', 'localhost']) {
+      const index = fakeResponse()
+      expect(connection.authorizeIndex(fakeRequest({ host }, '/'), index.response)).toBe(true)
+      expect(index.state.status).toBeUndefined()
+      expect(connection.admit(fakeRequest({ host }))).toEqual({ peer: connection.browserPeer })
+    }
+    // A stale or wrong ?token= URL (a restart changes the process token) must
+    // not lock a no-auth deployment out of its own index.
+    const stale = fakeResponse()
+    expect(connection.authorizeIndex(fakeRequest({ host: 'harness.example' }, '/?token=stale'), stale.response)).toBe(true)
+    await dispose()
+  })
+
+  it('still rejects an untrusted Host with the flag on: no cookie, no owner Peer, no index', async () => {
+    const { connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
+    const index = fakeResponse()
+    expect(connection.authorizeIndex(fakeRequest({ host: 'evil.example' }, '/'), index.response)).toBe(false)
+    expect(index.state.status).toBe(403)
+    expect(index.state.headers?.['set-cookie']).toBeUndefined()
+    expect(connection.admit(fakeRequest({ host: 'evil.example' }))).toEqual({ rejection: 403 })
+    // The cross-site fence applies as well: a trusted Host with a cross-site
+    // marker or a foreign Origin is not admitted.
+    expect(connection.admit(fakeRequest({ host: 'harness.example', 'sec-fetch-site': 'cross-site' })))
+      .toEqual({ rejection: 403 })
+    expect(connection.admit(fakeRequest({ host: 'harness.example', origin: 'http://evil.example' })))
+      .toEqual({ rejection: 403 })
+    await dispose()
+  })
+})

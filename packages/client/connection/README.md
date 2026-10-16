@@ -17,6 +17,7 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
 - [Browser authentication and request trust](#browser-authentication-and-request-trust)
 - [Connection generation](#connection-generation)
 - [Model Experience](#model-experience)
+- [Fork opt-in: no-auth launch (dsh#02)](#fork-no-auth)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
@@ -72,6 +73,19 @@ None, as the wire consumer layer moves already-composed messages between browser
 #### KV Cache effect
 
 None; this package neither assembles nor sends a provider request.
+
+<a id="fork-no-auth"></a>
+## Fork opt-in: no-auth launch (dsh#02)
+
+`fork.noAuth` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`. Set on the `connection` row, it makes `GET /` serve `index.html` and `/api` admit the owner browser Peer without a launch token or browser cookie, and it ignores any `?token=` on the index URL. **This removes cookie authentication.** It is meant for a deployment whose perimeter (for example Cloudflare Access) already authenticates every browser. The Host/Origin fence stays the gate: a request is admitted only when its `Host` is loopback, the listener's bind IP, or a `trustedHosts` entry, and an untrusted `Host` (or a cross-site `Origin`) is still refused with 403 and never reaches the Peer. PROD does not set it. Because a patch replaces the row's whole `config`, restate the invocation authorities:
+
+```yaml
+- id: connection
+  config:
+    trustedHosts: !!js ctx.webStartup.trustedHosts
+    fork:
+      noAuth: true
+```
 
 ## Known Limitations and Deferred Work
 

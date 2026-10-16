@@ -17,6 +17,7 @@ kind: "package-reference"
 - [浏览器认证与请求信任](#browser-authentication-and-request-trust)
 - [Connection generation](#connection-generation)
 - [模型体验](#model-experience)
+- [Fork 可选项：免认证启动（dsh#02）](#fork-no-auth)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
@@ -72,6 +73,19 @@ HTTPS cookie 名称与签名 audience 包含 `https:` scheme，因此即使 host
 #### KV Cache 影响
 
 无；该包既不组装也不发送提供方请求。
+
+<a id="fork-no-auth"></a>
+## Fork 可选项：免认证启动（dsh#02）
+
+`fork.noAuth` 是仅由 dsh#02 fork 补丁系列新增的开关；缺省或为 `false` 时保持上游行为不变。在 `connection` 行上设置后，`GET /` 直接提供 `index.html`，`/api` 无需启动令牌或浏览器 Cookie 即可接纳所有者浏览器 Peer，并忽略索引 URL 上的 `?token=`。**这会移除 Cookie 认证**，仅适用于外部边界（例如 Cloudflare Access）已经对每个浏览器完成认证的部署。Host/Origin 围栏仍是准入关口：只有 `Host` 为回环地址、监听器绑定 IP 或 `trustedHosts` 条目的请求才会被接纳，不受信任的 `Host`（或跨站 `Origin`）依旧返回 403，永远到不了 Peer。PROD 不设置该选项。由于补丁会替换整行的 `config`，需要重新写出调用时的信任主机：
+
+```yaml
+- id: connection
+  config:
+    trustedHosts: !!js ctx.webStartup.trustedHosts
+    fork:
+      noAuth: true
+```
 
 ## 已知限制与暂缓事项
 

@@ -107,6 +107,27 @@ export interface ConnectionConfig {
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
+  /**
+   * dsh#02 fork opt-ins; absent or false is stock behavior.
+   * @see ForkConnectionConfig
+   */
+  fork?: ForkConnectionConfig
+}
+
+/**
+ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
+ * the stock upstream behavior.
+ */
+export interface ForkConnectionConfig {
+  /**
+   * Serve the index and admit `/api` without a launch token or browser cookie.
+   * A request is still admitted only when its Host passes the Host/Origin fence
+   * (loopback, the listener's bind address, or `trustedHosts`); an untrusted
+   * Host gets 403 and never reaches the owner Peer. For a deployment whose
+   * perimeter (for example Cloudflare Access) already authenticates every
+   * browser; PROD never sets it. @default false
+   */
+  noAuth?: boolean
 }
 
 export const Config: z<ConnectionConfig> = z.object({
@@ -114,6 +135,10 @@ export const Config: z<ConnectionConfig> = z.object({
   trustedHosts: z.array(String).default([]),
   cookieMaxAgeDays: z.natural().min(1).default(30),
   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
+  // Omitted stays omitted, so the stock resolved config is unchanged.
+  fork: z.object({
+    noAuth: z.boolean().default(false),
+  }).default(undefined as never),
 })
 
 /**
@@ -137,6 +162,7 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
     ctx,
     trustedHosts,
     await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
+    config?.fork?.noAuth === true,
   )
   ctx.inject(['webServer'], (webCtx) => {
     assertImageBodyCapacity(webCtx, maxRequestBodyBytes)
