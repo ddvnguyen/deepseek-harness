@@ -1,0 +1,351 @@
+From 6f703c09eebd3742b86d36436746a4e064a440aa Mon Sep 17 00:00:00 2001
+From: Ddv <ddvnguyen@gmail.com>
+Date: Fri, 16 Oct 2026 21:20:21 +0700
+Subject: [PATCH 2/2] fork(connection): opt-in fork.noAuth admits trusted-Host
+ requests without a launch token
+
+Default is stock: no token -> 401. With connection.fork.noAuth the Host fence
+(trustedHosts) stays the gate: an untrusted Host is rejected 403, a trusted one
+is admitted as the shared browser peer. Intended for a deployment behind an
+external perimeter (Cloudflare Access); PROD never sets it.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ docs/config-catalog.md                        | 21 ++++++++
+ docs/config-catalog.zh.md                     | 21 ++++++++
+ packages/client/connection/README.i18n.yaml   | 11 ++--
+ packages/client/connection/README.md          | 14 ++++++
+ packages/client/connection/README.zh.md       | 14 ++++++
+ packages/client/connection/src/index.ts       | 26 ++++++++++
+ packages/client/connection/src/rpc-host.ts    | 15 +++++-
+ .../connection/tests/node-half.host.spec.ts   | 50 +++++++++++++++++++
+ 8 files changed, 167 insertions(+), 5 deletions(-)
+
+diff --git a/docs/config-catalog.md b/docs/config-catalog.md
+index ce7d3715d5..54d7fa3daa 100644
+--- a/docs/config-catalog.md
++++ b/docs/config-catalog.md
+@@ -453,6 +453,11 @@ export interface ConnectionConfig {
+   cookieMaxAgeDays?: number
+   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
+   maxRequestBodyBytes?: number
++  /**
++   * dsh#02 fork opt-ins; absent or false is stock behavior.
++   * @see ForkConnectionConfig
++   */
++  fork?: ForkConnectionConfig
+ }
+ 
+ /** Timing for generation readiness and automatic reconnection. */
+@@ -471,6 +476,22 @@ export interface ConnectionRecoveryConfig {
+   /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
+   generationReadyTimeoutMs?: number
+ }
++
++/**
++ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
++ * the stock upstream behavior.
++ */
++export interface ForkConnectionConfig {
++  /**
++   * Serve the index and admit `/api` without a launch token or browser cookie.
++   * A request is still admitted only when its Host passes the Host/Origin fence
++   * (loopback, the listener's bind address, or `trustedHosts`); an untrusted
++   * Host gets 403 and never reaches the owner Peer. For a deployment whose
++   * perimeter (for example Cloudflare Access) already authenticates every
++   * browser; PROD never sets it. @default false
++   */
++  noAuth?: boolean
++}
+ ```
+ <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-connection -->
+ 
+diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
+index a84c227e08..201057368f 100644
+--- a/docs/config-catalog.zh.md
++++ b/docs/config-catalog.zh.md
+@@ -455,6 +455,11 @@ export interface ConnectionConfig {
+   cookieMaxAgeDays?: number
+   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
+   maxRequestBodyBytes?: number
++  /**
++   * dsh#02 fork opt-ins; absent or false is stock behavior.
++   * @see ForkConnectionConfig
++   */
++  fork?: ForkConnectionConfig
+ }
+ 
+ /** Timing for generation readiness and automatic reconnection. */
+@@ -473,6 +478,22 @@ export interface ConnectionRecoveryConfig {
+   /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
+   generationReadyTimeoutMs?: number
+ }
++
++/**
++ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
++ * the stock upstream behavior.
++ */
++export interface ForkConnectionConfig {
++  /**
++   * Serve the index and admit `/api` without a launch token or browser cookie.
++   * A request is still admitted only when its Host passes the Host/Origin fence
++   * (loopback, the listener's bind address, or `trustedHosts`); an untrusted
++   * Host gets 403 and never reaches the owner Peer. For a deployment whose
++   * perimeter (for example Cloudflare Access) already authenticates every
++   * browser; PROD never sets it. @default false
++   */
++  noAuth?: boolean
++}
+ ```
+ <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-connection -->
+ 
+diff --git a/packages/client/connection/README.i18n.yaml b/packages/client/connection/README.i18n.yaml
+index c3032532d7..937e37b0b6 100644
+--- a/packages/client/connection/README.i18n.yaml
++++ b/packages/client/connection/README.i18n.yaml
+@@ -12,8 +12,8 @@
+   en: a83b5e9fd1968062
+   zh: ac68628e185a4bff
+ /deepseek-ai-dsh-client-connection/table-of-contents:
+-  en: 18792bf2fb4f8030
+-  zh: 84c63acc7e0099ae
++  en: f6bccb54d468c1e9
++  zh: 73070e47a7d59d29
+ /deepseek-ai-dsh-client-connection/use-this-package:
+   en: da6810858bf74a86
+   zh: d623e510ec74520f
+@@ -27,8 +27,11 @@
+   en: 88bbc33fe9ae9df8
+   zh: bfbab6d51b4abd40
+ /deepseek-ai-dsh-client-connection/model-experience/kv-cache-effect:
+-  en: ca75c51c89c2c9b0
+-  zh: de54f3467ef3b9be
++  en: 9b6d35ab97d98c74
++  zh: ac8a1a4b438798dc
++/deepseek-ai-dsh-client-connection/fork-opt-in-no-auth-launch-dsh-02:
++  en: 6162110b0a5c7260
++  zh: cf201bcd45a48a10
+ /deepseek-ai-dsh-client-connection/known-limitations-and-deferred-work:
+   en: a860aa95302e4f02
+   zh: 4df79a08b5fe018e
+diff --git a/packages/client/connection/README.md b/packages/client/connection/README.md
+index e6de487bdb..82f248b6b6 100644
+--- a/packages/client/connection/README.md
++++ b/packages/client/connection/README.md
+@@ -17,6 +17,7 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
+ - [Browser authentication and request trust](#browser-authentication-and-request-trust)
+ - [Connection generation](#connection-generation)
+ - [Model Experience](#model-experience)
++- [Fork opt-in: no-auth launch (dsh#02)](#fork-no-auth)
+ - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+ - [Dev Note](#dev-note)
+ 
+@@ -73,6 +74,19 @@ None, as the wire consumer layer moves already-composed messages between browser
+ 
+ None; this package neither assembles nor sends a provider request.
+ 
++<a id="fork-no-auth"></a>
++## Fork opt-in: no-auth launch (dsh#02)
++
++`fork.noAuth` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`. Set on the `connection` row, it makes `GET /` serve `index.html` and `/api` admit the owner browser Peer without a launch token or browser cookie, and it ignores any `?token=` on the index URL. **This removes cookie authentication.** It is meant for a deployment whose perimeter (for example Cloudflare Access) already authenticates every browser. The Host/Origin fence stays the gate: a request is admitted only when its `Host` is loopback, the listener's bind IP, or a `trustedHosts` entry, and an untrusted `Host` (or a cross-site `Origin`) is still refused with 403 and never reaches the Peer. PROD does not set it. Because a patch replaces the row's whole `config`, restate the invocation authorities:
++
++```yaml
++- id: connection
++  config:
++    trustedHosts: !!js ctx.webStartup.trustedHosts
++    fork:
++      noAuth: true
++```
++
+ ## Known Limitations and Deferred Work
+ 
+ <a id="known-limitations-and-deferred-work"></a>
+diff --git a/packages/client/connection/README.zh.md b/packages/client/connection/README.zh.md
+index 5b57792975..618a61ccb5 100644
+--- a/packages/client/connection/README.zh.md
++++ b/packages/client/connection/README.zh.md
+@@ -17,6 +17,7 @@ kind: "package-reference"
+ - [浏览器认证与请求信任](#browser-authentication-and-request-trust)
+ - [Connection generation](#connection-generation)
+ - [模型体验](#model-experience)
++- [Fork 可选项：免认证启动（dsh#02）](#fork-no-auth)
+ - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
+ - [开发备注](#dev-note)
+ 
+@@ -73,6 +74,19 @@ HTTPS cookie 名称与签名 audience 包含 `https:` scheme，因此即使 host
+ 
+ 无；该包既不组装也不发送提供方请求。
+ 
++<a id="fork-no-auth"></a>
++## Fork 可选项：免认证启动（dsh#02）
++
++`fork.noAuth` 是仅由 dsh#02 fork 补丁系列新增的开关；缺省或为 `false` 时保持上游行为不变。在 `connection` 行上设置后，`GET /` 直接提供 `index.html`，`/api` 无需启动令牌或浏览器 Cookie 即可接纳所有者浏览器 Peer，并忽略索引 URL 上的 `?token=`。**这会移除 Cookie 认证**，仅适用于外部边界（例如 Cloudflare Access）已经对每个浏览器完成认证的部署。Host/Origin 围栏仍是准入关口：只有 `Host` 为回环地址、监听器绑定 IP 或 `trustedHosts` 条目的请求才会被接纳，不受信任的 `Host`（或跨站 `Origin`）依旧返回 403，永远到不了 Peer。PROD 不设置该选项。由于补丁会替换整行的 `config`，需要重新写出调用时的信任主机：
++
++```yaml
++- id: connection
++  config:
++    trustedHosts: !!js ctx.webStartup.trustedHosts
++    fork:
++      noAuth: true
++```
++
+ ## 已知限制与暂缓事项
+ 
+ <a id="known-limitations-and-deferred-work"></a>
+diff --git a/packages/client/connection/src/index.ts b/packages/client/connection/src/index.ts
+index d563cd40e8..3e1d127c79 100644
+--- a/packages/client/connection/src/index.ts
++++ b/packages/client/connection/src/index.ts
+@@ -107,6 +107,27 @@ export interface ConnectionConfig {
+   cookieMaxAgeDays?: number
+   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
+   maxRequestBodyBytes?: number
++  /**
++   * dsh#02 fork opt-ins; absent or false is stock behavior.
++   * @see ForkConnectionConfig
++   */
++  fork?: ForkConnectionConfig
++}
++
++/**
++ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
++ * the stock upstream behavior.
++ */
++export interface ForkConnectionConfig {
++  /**
++   * Serve the index and admit `/api` without a launch token or browser cookie.
++   * A request is still admitted only when its Host passes the Host/Origin fence
++   * (loopback, the listener's bind address, or `trustedHosts`); an untrusted
++   * Host gets 403 and never reaches the owner Peer. For a deployment whose
++   * perimeter (for example Cloudflare Access) already authenticates every
++   * browser; PROD never sets it. @default false
++   */
++  noAuth?: boolean
+ }
+ 
+ export const Config: z<ConnectionConfig> = z.object({
+@@ -114,6 +135,10 @@ export const Config: z<ConnectionConfig> = z.object({
+   trustedHosts: z.array(String).default([]),
+   cookieMaxAgeDays: z.natural().min(1).default(30),
+   maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
++  // Omitted stays omitted, so the stock resolved config is unchanged.
++  fork: z.object({
++    noAuth: z.boolean().default(false),
++  }).default(undefined as never),
+ })
+ 
+ /**
+@@ -137,6 +162,7 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
+     ctx,
+     trustedHosts,
+     await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
++    config?.fork?.noAuth === true,
+   )
+   ctx.inject(['webServer'], (webCtx) => {
+     assertImageBodyCapacity(webCtx, maxRequestBodyBytes)
+diff --git a/packages/client/connection/src/rpc-host.ts b/packages/client/connection/src/rpc-host.ts
+index 88e7b48baa..68483e5681 100644
+--- a/packages/client/connection/src/rpc-host.ts
++++ b/packages/client/connection/src/rpc-host.ts
+@@ -83,11 +83,13 @@ export class HostConnectionService extends Service implements HostConnectionHand
+    * @param ctx - owning Connection plugin context.
+    * @param trustedHosts - deployment authorities accepted by the Host/Origin fence.
+    * @param browserAuth - process token and persistent browser-session owner.
++   * @param noAuth - dsh#02 fork opt-in: a Host-fenced request needs no token or cookie.
+    */
+   constructor(
+     ctx: Context,
+     private readonly trustedHosts: readonly string[],
+     private readonly browserAuth: BrowserAuth,
++    private readonly noAuth = false,
+   ) {
+     super(ctx, 'connection')
+     this.owner = ctx
+@@ -133,7 +135,10 @@ export class HostConnectionService extends Service implements HostConnectionHand
+     if (this.browserAuth.isAuthenticated(request, secure)) return { peer: this.browserPeer }
+     const id = this.browserAuth.authenticateApi(request, secure)
+     const record = id === undefined ? undefined : this.peers.get(id)
+-    return record === undefined ? { rejection: 401 } : { peer: record.peer }
++    if (record !== undefined) return { peer: record.peer }
++    // dsh#02 fork.noAuth: the Host fence above is the only gate; the request
++    // shares the owner browser Peer a cookie-authenticated browser would get.
++    return this.noAuth ? { peer: this.browserPeer } : { rejection: 401 }
+   }
+ 
+   /** Create one in-process Peer owned by the Context that read this service. */
+@@ -191,6 +196,14 @@ export class HostConnectionService extends Service implements HostConnectionHand
+    * Authenticate an index request; native TLS listeners mint Secure cookies.
+    */
+   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
++    if (this.noAuth) {
++      // dsh#02 fork.noAuth: serve the index to any Host the fence trusts, with
++      // or without a token; an untrusted Host is refused outright.
++      if (this.isTrusted(request)) return true
++      response.writeHead(403, { 'cache-control': 'no-store', 'content-type': 'text/plain; charset=utf-8' })
++      response.end(request.method === 'HEAD' ? undefined : 'forbidden')
++      return false
++    }
+     return this.browserAuth.authorizeIndex(request, response, this.ctx.get('webServer')?.protocol === 'https:')
+   }
+ 
+diff --git a/packages/client/connection/tests/node-half.host.spec.ts b/packages/client/connection/tests/node-half.host.spec.ts
+index b3793c9cfd..8ab842ab29 100644
+--- a/packages/client/connection/tests/node-half.host.spec.ts
++++ b/packages/client/connection/tests/node-half.host.spec.ts
+@@ -959,3 +959,53 @@ describe('connection node half over a real HTTP server', () => {
+     }
+   })
+ })
++
++// dsh#02 fork opt-in. Stock behavior (the default) is pinned first, so these
++// double as the mutation check for the flag: with `fork.noAuth` off, a request
++// with no token and no cookie is refused exactly as on upstream alpha.5.
++describe('connection node half: fork.noAuth (dsh#02)', () => {
++  const trusted = { trustedHosts: ['harness.example'] }
++
++  it('stays stock by default: no token or cookie means 401 on the index and the API', async () => {
++    for (const config of [trusted, { ...trusted, fork: { noAuth: false } }]) {
++      const { connection, dispose } = await mounted(config)
++      const index = fakeResponse()
++      expect(connection.authorizeIndex(fakeRequest({ host: 'harness.example' }, '/'), index.response)).toBe(false)
++      expect(index.state.status).toBe(401)
++      expect(connection.admit(fakeRequest({ host: 'harness.example' }))).toEqual({ rejection: 401 })
++      expect(connection.admit(fakeRequest({ host: '127.0.0.1:3080' }))).toEqual({ rejection: 401 })
++      await dispose()
++    }
++  })
++
++  it('serves the index and admits the owner Peer to a trusted Host with no token or cookie', async () => {
++    const { connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
++    for (const host of ['harness.example', '127.0.0.1:3080', 'localhost']) {
++      const index = fakeResponse()
++      expect(connection.authorizeIndex(fakeRequest({ host }, '/'), index.response)).toBe(true)
++      expect(index.state.status).toBeUndefined()
++      expect(connection.admit(fakeRequest({ host }))).toEqual({ peer: connection.browserPeer })
++    }
++    // A stale or wrong ?token= URL (a restart changes the process token) must
++    // not lock a no-auth deployment out of its own index.
++    const stale = fakeResponse()
++    expect(connection.authorizeIndex(fakeRequest({ host: 'harness.example' }, '/?token=stale'), stale.response)).toBe(true)
++    await dispose()
++  })
++
++  it('still rejects an untrusted Host with the flag on: no cookie, no owner Peer, no index', async () => {
++    const { connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
++    const index = fakeResponse()
++    expect(connection.authorizeIndex(fakeRequest({ host: 'evil.example' }, '/'), index.response)).toBe(false)
++    expect(index.state.status).toBe(403)
++    expect(index.state.headers?.['set-cookie']).toBeUndefined()
++    expect(connection.admit(fakeRequest({ host: 'evil.example' }))).toEqual({ rejection: 403 })
++    // The cross-site fence applies as well: a trusted Host with a cross-site
++    // marker or a foreign Origin is not admitted.
++    expect(connection.admit(fakeRequest({ host: 'harness.example', 'sec-fetch-site': 'cross-site' })))
++      .toEqual({ rejection: 403 })
++    expect(connection.admit(fakeRequest({ host: 'harness.example', origin: 'http://evil.example' })))
++      .toEqual({ rejection: 403 })
++    await dispose()
++  })
++})
+-- 
+2.53.0
+

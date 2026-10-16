@@ -1,0 +1,572 @@
+From d31bd0c86d312ef9295aa4973f121d088adb2f01 Mon Sep 17 00:00:00 2001
+From: Ddv <ddvnguyen@gmail.com>
+Date: Fri, 16 Oct 2026 21:15:04 +0700
+Subject: [PATCH 1/2] fork(web): opt-in fork.allowWildcardHost accepts --host
+ 0.0.0.0
+
+Stock alpha.5 refuses an unspecified bind address in two places: the web
+command-line provider (--host) and the webserver Config. Both stay the default.
+A deployment that sits behind an external perimeter and a --trusted-host list
+can name `fork.allowWildcardHost: true` on the `web-startup` row; the bundle
+passes it on to the `webserver` row, and the Host fence is untouched.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+---
+ docs/config-catalog.md                        | 20 ++++++++++
+ docs/config-catalog.zh.md                     | 20 ++++++++++
+ packages/bundle/web-app/README.i18n.yaml      | 11 +++--
+ packages/bundle/web-app/README.md             | 13 ++++++
+ packages/bundle/web-app/README.zh.md          | 13 ++++++
+ packages/bundle/web-app/cordis.patch.yml      |  7 +++-
+ packages/bundle/web-app/src/startup.ts        | 33 ++++++++++++++-
+ packages/bundle/web-app/tests/startup.spec.ts | 29 +++++++++++++-
+ packages/host/webserver/README.i18n.yaml      | 11 +++--
+ packages/host/webserver/README.md             | 15 +++++++
+ packages/host/webserver/README.zh.md          | 15 +++++++
+ packages/host/webserver/src/index.ts          | 40 +++++++++++++++++--
+ .../host/webserver/tests/webserver.spec.ts    | 20 +++++++++-
+ 13 files changed, 229 insertions(+), 18 deletions(-)
+
+diff --git a/docs/config-catalog.md b/docs/config-catalog.md
+index 5240eec77a..ce7d3715d5 100644
+--- a/docs/config-catalog.md
++++ b/docs/config-catalog.md
+@@ -1679,6 +1679,11 @@ export interface Config {
+   compressionLevel?: number
+   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
+   compressionThresholdBytes?: number
++  /**
++   * dsh#02 fork opt-ins; absent or false is stock behavior.
++   * @see ForkConfig
++   */
++  fork?: ForkConfig
+ }
+ 
+ /**
+@@ -1692,6 +1697,21 @@ export interface TlsConfig {
+   /** Private key file for the chain's leaf certificate; unencrypted PEM. */
+   keyFile: string
+ }
++
++/**
++ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
++ * the stock upstream behavior, so a deployment must name it in its own config
++ * for the fork to differ from upstream.
++ */
++export interface ForkConfig {
++  /**
++   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
++   * it at load. Binding every interface is safe only behind an external
++   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
++   * sets it. @default false
++   */
++  allowWildcardHost?: boolean
++}
+ ```
+ <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
+ 
+diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
+index bf66626c51..a84c227e08 100644
+--- a/docs/config-catalog.zh.md
++++ b/docs/config-catalog.zh.md
+@@ -1681,6 +1681,11 @@ export interface Config {
+   compressionLevel?: number
+   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
+   compressionThresholdBytes?: number
++  /**
++   * dsh#02 fork opt-ins; absent or false is stock behavior.
++   * @see ForkConfig
++   */
++  fork?: ForkConfig
+ }
+ 
+ /**
+@@ -1694,6 +1699,21 @@ export interface TlsConfig {
+   /** Private key file for the chain's leaf certificate; unencrypted PEM. */
+   keyFile: string
+ }
++
++/**
++ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
++ * the stock upstream behavior, so a deployment must name it in its own config
++ * for the fork to differ from upstream.
++ */
++export interface ForkConfig {
++  /**
++   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
++   * it at load. Binding every interface is safe only behind an external
++   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
++   * sets it. @default false
++   */
++  allowWildcardHost?: boolean
++}
+ ```
+ <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
+ 
+diff --git a/packages/bundle/web-app/README.i18n.yaml b/packages/bundle/web-app/README.i18n.yaml
+index 1d8e07a01e..a4583f5385 100644
+--- a/packages/bundle/web-app/README.i18n.yaml
++++ b/packages/bundle/web-app/README.i18n.yaml
+@@ -12,8 +12,8 @@
+   en: 0a2a9876194543e5
+   zh: ff472776a44ae260
+ /deepseek-ai-dsh-web-app/table-of-contents:
+-  en: d152484eb41ac6b4
+-  zh: 09388d293f9be9cb
++  en: c584ce2b287425f5
++  zh: 608b79cbd23bd8d1
+ /deepseek-ai-dsh-web-app/use-this-package:
+   en: 3bd37b85139d2fa7
+   zh: ba86c807eb83866e
+@@ -63,8 +63,11 @@
+   en: 449fbfa3986f98f0
+   zh: a7d66333594ab2dd
+ /deepseek-ai-dsh-web-app/model-experience/web-runtime-variable/kv-cache-effect:
+-  en: 37542a8b81a744f5
+-  zh: c0048aaadecae296
++  en: 87df66f690644b64
++  zh: 1fdf5475454f736a
++/deepseek-ai-dsh-web-app/fork-opt-in-wildcard-bind-dsh-02:
++  en: ae7dbf7a2782f4f6
++  zh: c9410f94e271e455
+ /deepseek-ai-dsh-web-app/known-limitations-and-deferred-work:
+   en: 635c1336e2f4e821
+   zh: caabdecb02e2df14
+diff --git a/packages/bundle/web-app/README.md b/packages/bundle/web-app/README.md
+index 2305d402cd..9a0cd6849d 100644
+--- a/packages/bundle/web-app/README.md
++++ b/packages/bundle/web-app/README.md
+@@ -21,6 +21,7 @@ Run `dsh --profile web` for browser chat, model and settings management, and ses
+ - [Understand the implementation](#understand-the-implementation)
+ - [Further Exploration](#further-exploration)
+ - [Model Experience](#model-experience)
++- [Fork opt-in: wildcard bind (dsh#02)](#fork-wildcard-host)
+ - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+ - [Dev Note](#dev-note)
+ 
+@@ -160,6 +161,18 @@ Two managed-environment variable lines; constant per process.
+ 
+ None; the plugin contributes no system-prompt text.
+ 
++<a id="fork-wildcard-host"></a>
++## Fork opt-in: wildcard bind (dsh#02)
++
++`fork.allowWildcardHost` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`: `--host 0.0.0.0` (or `::`) is refused. Set it on the `web-startup` row to let the CLI accept an unspecified `--host`; the bundle passes it on to the `webserver` row, which then binds it. Binding every interface is safe only behind an external perimeter and the `connection` row's `trustedHosts` Host fence, which this option leaves untouched, so list every authority browsers use with `--trusted-host`. PROD does not set it.
++
++```yaml
++- id: web-startup
++  config:
++    fork:
++      allowWildcardHost: true
++```
++
+ ## Known Limitations and Deferred Work
+ 
+ <a id="known-limitations-and-deferred-work"></a>
+diff --git a/packages/bundle/web-app/README.zh.md b/packages/bundle/web-app/README.zh.md
+index 8d08ede8af..fbee5a8207 100644
+--- a/packages/bundle/web-app/README.zh.md
++++ b/packages/bundle/web-app/README.zh.md
+@@ -21,6 +21,7 @@ kind: "package-bundle"
+ - [理解实现](#understand-the-implementation)
+ - [进一步探索](#further-exploration)
+ - [模型体验](#model-experience)
++- [Fork 可选项：通配地址绑定（dsh#02）](#fork-wildcard-host)
+ - [已知限制与延期工作](#known-limitations-and-deferred-work)
+ - [开发备注](#dev-note)
+ 
+@@ -160,6 +161,18 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发
+ 
+ 无；该插件不贡献系统提示词文本。
+ 
++<a id="fork-wildcard-host"></a>
++## Fork 可选项：通配地址绑定（dsh#02）
++
++`fork.allowWildcardHost` 是仅由 dsh#02 fork 补丁系列新增的开关；缺省或为 `false` 时保持上游行为不变，即拒绝 `--host 0.0.0.0`（或 `::`）。在 `web-startup` 行上设置后，命令行接受未指定地址的 `--host`，bundle 再把它传给 `webserver` 行去绑定。绑定所有接口只在外部边界与 `connection` 行的 `trustedHosts` Host 围栏之后才安全，本选项不改动该围栏，因此请用 `--trusted-host` 列出浏览器使用的所有主机。PROD 不设置该选项。
++
++```yaml
++- id: web-startup
++  config:
++    fork:
++      allowWildcardHost: true
++```
++
+ ## 已知限制与延期工作
+ 
+ <a id="known-limitations-and-deferred-work"></a>
+diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
+index a1ca0b5483..689cbebfd6 100644
+--- a/packages/bundle/web-app/cordis.patch.yml
++++ b/packages/bundle/web-app/cordis.patch.yml
+@@ -175,7 +175,8 @@
+     # by the web-runtime row below through the fallback seat. Routing and
+     # browser-facing asset paths do not depend on the advertised URL, which the
+     # web-runtime row owns; Connection reads trust authorities from webStartup.
+-    # This row rejects wildcard binds.
++    # This row rejects wildcard binds unless the web-startup row sets
++    # fork.allowWildcardHost (dsh#02 fork patch).
+     - id: webserver
+       name: '@deepseek-ai/dsh-host-webserver'
+       inject: [webStartup]
+@@ -183,6 +184,10 @@
+         host: !!js ctx.webStartup.host ?? '127.0.0.1'
+         port: !!js ctx.webStartup.port ?? 3080
+         tls: !!js ctx.webStartup.tls
++        # dsh#02: lifts the wildcard rejection only when the web-startup row
++        # opted in (fork.allowWildcardHost); stock leaves it off.
++        fork:
++          allowWildcardHost: !!js ctx.webStartup.allowWildcardHost === true
+         compression: gzip
+         compressionLevel: 1
+         compressionThresholdBytes: 1024
+diff --git a/packages/bundle/web-app/src/startup.ts b/packages/bundle/web-app/src/startup.ts
+index 3152e085fb..49b9a51f3e 100644
+--- a/packages/bundle/web-app/src/startup.ts
++++ b/packages/bundle/web-app/src/startup.ts
+@@ -9,6 +9,7 @@
+ 
+ import { Command } from 'commander'
+ import type { Context } from '@deepseek-ai/cordis'
++import z from '@deepseek-ai/schemastery'
+ import { parseCmdline } from '@deepseek-ai/dsh-cmdline'
+ import { isWildcardHost, type TlsConfig } from '@deepseek-ai/dsh-host-webserver'
+ import { parsePublicUrl } from './public-url.ts'
+@@ -19,6 +20,30 @@ export const name = 'web-startup'
+ /** Services required before the flags can be resolved. */
+ export const inject = ['cmdlineArgs']
+ 
++/**
++ * Switches that only the dsh#02 fork patch series adds; absent or false is
++ * stock upstream behavior.
++ */
++export interface ForkStartupConfig {
++  /**
++   * Accept `--host 0.0.0.0` (or another unspecified address) instead of
++   * refusing it. Only for a deployment behind an external perimeter and a
++   * `--trusted-host` list; PROD never sets it. @default false
++   */
++  allowWildcardHost?: boolean
++}
++
++/** Optional row config of the `web-startup` row. */
++export interface StartupConfig {
++  fork?: ForkStartupConfig
++}
++
++export const Config: z<StartupConfig> = z.object({
++  fork: z.object({
++    allowWildcardHost: z.boolean().default(false),
++  }).default({}),
++})
++
+ /** Service provided by this ordinary plugin and injected by flag-configured rows. */
+ export const WEB_STARTUP_SERVICE = 'webStartup'
+ 
+@@ -39,6 +64,8 @@ export interface WebStartupValues {
+   trustedHosts: string[]
+   /** Server certificate chain and unencrypted private key supplied together. */
+   tls?: TlsConfig
++  /** dsh#02 fork opt-in; present only when the row config enabled it. */
++  allowWildcardHost?: true
+ }
+ 
+ /** The web flag family, as commander parsed it. */
+@@ -88,11 +115,12 @@ Examples:
+  * and `--help` provide no service.
+  * @param ctx - plugin context carrying the command line.
+  */
+-export function apply(ctx: Context): void {
++export function apply(ctx: Context, config?: StartupConfig): void {
++  const allowWildcardHost = config?.fork?.allowWildcardHost === true
+   const program = webCommand()
+   program.action(() => {
+     const options = program.opts<WebOptions>()
+-    if (options.host !== undefined && isWildcardHost(options.host)) {
++    if (options.host !== undefined && isWildcardHost(options.host) && !allowWildcardHost) {
+       program.error(`error: --host ${options.host} is an unspecified (wildcard) address, which is not supported: binding every interface would expose remote code execution to the network; bind one concrete IPv4 or IPv6 address instead`)
+     }
+     if (options.port !== undefined && !/^\d+$/.test(options.port)) {
+@@ -117,6 +145,7 @@ export function apply(ctx: Context): void {
+       ...options.port !== undefined && { port: Number(options.port) },
+       ...options.publicUrl !== undefined && { publicUrl: options.publicUrl },
+       ...tls !== undefined && { tls },
++      ...allowWildcardHost && { allowWildcardHost: true as const },
+       trustedHosts: options.trustedHost ?? [],
+     } satisfies WebStartupValues)
+   })
+diff --git a/packages/bundle/web-app/tests/startup.spec.ts b/packages/bundle/web-app/tests/startup.spec.ts
+index 9a7a01a5cb..339d768092 100644
+--- a/packages/bundle/web-app/tests/startup.spec.ts
++++ b/packages/bundle/web-app/tests/startup.spec.ts
+@@ -38,7 +38,7 @@ afterEach(async () => {
+  * @param args - the invocation's inner arguments.
+  * @returns the service value and observed consumer/process effects.
+  */
+-async function bootProvider(args: string[]): Promise<{
++async function bootProvider(args: string[], providerConfig?: string[]): Promise<{
+   values: WebStartupValues | undefined
+   observed: Observed
+ }> {
+@@ -53,7 +53,7 @@ export function apply(_ctx, config) { globalThis.__webStartupObserved.readerConf
+   writeFileSync(join(dir, 'provider.mjs'), `
+ export const name = 'web-startup'
+ export const inject = ['cmdlineArgs']
+-export const apply = ctx => globalThis.__webStartupApply(ctx)
++export const apply = (ctx, config) => globalThis.__webStartupApply(ctx, config)
+ `)
+   writeFileSync(join(dir, 'cordis.yml'), [
+     '- id: reader',
+@@ -68,6 +68,7 @@ export const apply = ctx => globalThis.__webStartupApply(ctx)
+     '    tls: !!js ctx.webStartup.tls',
+     '- id: provider',
+     `  name: ${pathToFileURL(join(dir, 'provider.mjs')).href}`,
++    ...providerConfig === undefined ? [] : ['  config:', ...providerConfig],
+     '',
+   ].join('\n'))
+   const observing = { write: (chunk: string) => { observed.out += chunk; return true } }
+@@ -125,6 +126,30 @@ describe('web command-line provider', () => {
+     expect(observed.exits).toEqual([1])
+   })
+ 
++  // dsh#02 fork opt-in: stock refusal above is the default; only the row's
++  // fork.allowWildcardHost lets the CLI hand a wildcard host to the webserver.
++  it('accepts wildcard --host only under the web-startup fork.allowWildcardHost opt-in', async () => {
++    const { values, observed } = await bootProvider(
++      ['--host', '0.0.0.0', '--trusted-host', '192.168.7.99'],
++      ['    fork:', '      allowWildcardHost: true'],
++    )
++    expect(observed.out).not.toContain('wildcard')
++    expect(values).toEqual({
++      host: '0.0.0.0', openBrowser: true, allowWildcardHost: true, trustedHosts: ['192.168.7.99'],
++    })
++    expect(observed.exits).toEqual([])
++  })
++
++  it('keeps refusing wildcard --host when the fork opt-in is explicitly false', async () => {
++    const { values, observed } = await bootProvider(
++      ['--host', '0.0.0.0'],
++      ['    fork:', '      allowWildcardHost: false'],
++    )
++    expect(observed.out).toContain('error: --host 0.0.0.0 is an unspecified (wildcard) address')
++    expect(values).toBeUndefined()
++    expect(observed.exits).toEqual([1])
++  })
++
+   it('leaves deployment values to each consumer when flags omit them', async () => {
+     const { values, observed } = await bootProvider([])
+     expect(values).toEqual({ openBrowser: true, trustedHosts: [] })
+diff --git a/packages/host/webserver/README.i18n.yaml b/packages/host/webserver/README.i18n.yaml
+index 61f92b3798..1dee179778 100644
+--- a/packages/host/webserver/README.i18n.yaml
++++ b/packages/host/webserver/README.i18n.yaml
+@@ -12,8 +12,8 @@
+   en: 0d1ffed238b25446
+   zh: 9f66adce1c593c53
+ /deepseek-ai-dsh-host-webserver/table-of-contents:
+-  en: d152484eb41ac6b4
+-  zh: 09388d293f9be9cb
++  en: c584ce2b287425f5
++  zh: 608b79cbd23bd8d1
+ /deepseek-ai-dsh-host-webserver/use-this-package:
+   en: 1998834973f7cf17
+   zh: 63455a2f75d090ad
+@@ -51,8 +51,11 @@
+   en: 38887e1f9117e7e5
+   zh: 6a6e1a002fac4624
+ /deepseek-ai-dsh-host-webserver/model-experience/kv-cache-effect:
+-  en: ca75c51c89c2c9b0
+-  zh: de54f3467ef3b9be
++  en: 13f41b4c090d6a0a
++  zh: 9106435637f61193
++/deepseek-ai-dsh-host-webserver/fork-opt-in-wildcard-bind-dsh-02:
++  en: 031c8260f84a42cb
++  zh: 29a6af4afd2a6496
+ /deepseek-ai-dsh-host-webserver/known-limitations-and-deferred-work:
+   en: 9aa6b8cf92d5b506
+   zh: 55ee3f6ad1cace50
+diff --git a/packages/host/webserver/README.md b/packages/host/webserver/README.md
+index 8b03024639..8eca1dea81 100644
+--- a/packages/host/webserver/README.md
++++ b/packages/host/webserver/README.md
+@@ -17,6 +17,7 @@ Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http`
+ - [Understand the implementation](#understand-the-implementation)
+ - [Further Exploration](#further-exploration)
+ - [Model Experience](#model-experience)
++- [Fork opt-in: wildcard bind (dsh#02)](#fork-wildcard-host)
+ - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+ - [Dev Note](#dev-note)
+ 
+@@ -119,6 +120,20 @@ None, as the HTTP carrier bridges browser and API handler and registers nothing
+ 
+ None; this package neither assembles nor sends a provider request.
+ 
++<a id="fork-wildcard-host"></a>
++## Fork opt-in: wildcard bind (dsh#02)
++
++`fork.allowWildcardHost` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`: `--host 0.0.0.0` (or `::`) is refused. Set `fork.allowWildcardHost` on the `webserver` row (the `dsh-web-app` bundle wires it from its `web-startup` row) and the unspecified address is accepted at load. Binding every interface is safe only behind an external perimeter and the `connection` row's `trustedHosts` Host fence, which this option leaves untouched, so list every authority browsers use with `--trusted-host`. PROD does not set it.
++
++```yaml
++- id: webserver
++  config:
++    host: 0.0.0.0
++    port: 3080
++    fork:
++      allowWildcardHost: true
++```
++
+ ## Known Limitations and Deferred Work
+ 
+ <a id="known-limitations-and-deferred-work"></a>
+diff --git a/packages/host/webserver/README.zh.md b/packages/host/webserver/README.zh.md
+index 29802a53a5..fffb7f67dd 100644
+--- a/packages/host/webserver/README.zh.md
++++ b/packages/host/webserver/README.zh.md
+@@ -17,6 +17,7 @@ kind: "package-reference"
+ - [理解实现](#understand-the-implementation)
+ - [进一步探索](#further-exploration)
+ - [模型体验](#model-experience)
++- [Fork 可选项：通配地址绑定（dsh#02）](#fork-wildcard-host)
+ - [已知限制与延期工作](#known-limitations-and-deferred-work)
+ - [开发备注](#dev-note)
+ 
+@@ -119,6 +120,20 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的
+ 
+ 无；该包既不组装也不发送提供方请求。
+ 
++<a id="fork-wildcard-host"></a>
++## Fork 可选项：通配地址绑定（dsh#02）
++
++`fork.allowWildcardHost` 是仅由 dsh#02 fork 补丁系列新增的开关；缺省或为 `false` 时保持上游行为不变，即拒绝 `--host 0.0.0.0`（或 `::`）。在 `webserver` 行上设置 `fork.allowWildcardHost`（`dsh-web-app` bundle 会从它的 `web-startup` 行接上），加载时即接受未指定地址。绑定所有接口只在外部边界与 `connection` 行的 `trustedHosts` Host 围栏之后才安全，本选项不改动该围栏，因此请用 `--trusted-host` 列出浏览器使用的所有主机。PROD 不设置该选项。
++
++```yaml
++- id: webserver
++  config:
++    host: 0.0.0.0
++    port: 3080
++    fork:
++      allowWildcardHost: true
++```
++
+ ## 已知限制与延期工作
+ 
+ <a id="known-limitations-and-deferred-work"></a>
+diff --git a/packages/host/webserver/src/index.ts b/packages/host/webserver/src/index.ts
+index 73139550d3..4e1f1a0fd0 100644
+--- a/packages/host/webserver/src/index.ts
++++ b/packages/host/webserver/src/index.ts
+@@ -101,6 +101,38 @@ export interface Config {
+   compressionLevel?: number
+   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
+   compressionThresholdBytes?: number
++  /**
++   * dsh#02 fork opt-ins; absent or false is stock behavior.
++   * @see ForkConfig
++   */
++  fork?: ForkConfig
++}
++
++/**
++ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
++ * the stock upstream behavior, so a deployment must name it in its own config
++ * for the fork to differ from upstream.
++ */
++export interface ForkConfig {
++  /**
++   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
++   * it at load. Binding every interface is safe only behind an external
++   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
++   * sets it. @default false
++   */
++  allowWildcardHost?: boolean
++}
++
++/**
++ * The wildcard rejection is stock behavior; only the dsh#02 fork opt-in lifts
++ * it. It runs at plugin load (the constructor) because it needs `host` and
++ * `fork` together, which a per-field schema transform cannot see.
++ */
++export function assertBindHost(host: string, fork?: ForkConfig): void {
++  const parsed = parseIpLiteral(host)
++  if (parsed !== undefined && isWildcardAddress(parsed) && fork?.allowWildcardHost !== true) {
++    throw new Error(`webserver: host ${JSON.stringify(host)} is an unspecified (wildcard) address, which is not supported: binding every interface would expose remote code execution to the network; bind one concrete IPv4 or IPv6 address of a local interface instead`)
++  }
+ }
+ 
+ const DEFAULT_COMPRESSION = 'none' as const
+@@ -280,9 +312,6 @@ export class WebServer extends Service {
+     host: z.transform(z.string(), (value) => {
+       const parsed = parseIpLiteral(value)
+       if (parsed === undefined) throw notLiteralError(value)
+-      if (isWildcardAddress(parsed)) {
+-        throw new Error(`webserver: host ${JSON.stringify(value)} is an unspecified (wildcard) address, which is not supported: binding every interface would expose remote code execution to the network; bind one concrete IPv4 or IPv6 address of a local interface instead`)
+-      }
+       return value
+     }).required(),
+     port: z.natural().max(65535).required(),
+@@ -294,6 +323,10 @@ export class WebServer extends Service {
+     compression: z.union([z.const('none'), z.const('gzip')]).default(DEFAULT_COMPRESSION),
+     compressionLevel: z.number().step(1).min(0).max(9).default(DEFAULT_COMPRESSION_LEVEL),
+     compressionThresholdBytes: z.natural().default(DEFAULT_COMPRESSION_THRESHOLD_BYTES),
++    // Omitted stays omitted, so the stock resolved config is unchanged.
++    fork: z.object({
++      allowWildcardHost: z.boolean().default(false),
++    }).default(undefined as never),
+   })
+ 
+   private readonly exact = new Map<string, WebRoute>()
+@@ -317,6 +350,7 @@ export class WebServer extends Service {
+ 
+   constructor(ctx: Context, private config: Config) {
+     super(ctx, 'webServer')
++    assertBindHost(config.host, config.fork)
+     const resolved = config as ResolvedConfig
+     // Schemastery passes an explicit `tls: null` through; only a real object serves TLS.
+     this.tlsConfig = resolved.tls ?? undefined
+diff --git a/packages/host/webserver/tests/webserver.spec.ts b/packages/host/webserver/tests/webserver.spec.ts
+index 3dad1dd472..7867e9c10b 100644
+--- a/packages/host/webserver/tests/webserver.spec.ts
++++ b/packages/host/webserver/tests/webserver.spec.ts
+@@ -21,7 +21,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
+ import { Context, FiberState } from '@deepseek-ai/cordis'
+ import Loader from '@deepseek-ai/cordis-plugin-loader'
+ import Include from '@deepseek-ai/cordis-plugin-include'
+-import HttpServer, { bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
++import HttpServer, { assertBindHost, bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
+ import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
+ 
+ /** One-shot barrier for disposal overlapping a pending PEM read. */
+@@ -241,7 +241,7 @@ describe('real Loader composition', () => {
+       '::ffff:0.0.0.0', '::ffff:0:0', '::ffff:0000:0000', '0:0:0:0:0:ffff:0:0',
+       '0:0:0:0:0:ffff:0.0.0.0', '::ffff:0.0.0.0%eth0',
+     ]) {
+-      expect(() => HttpServer.Config({ host, port: 0 })).toThrow(
++      expect(() => assertBindHost(host)).toThrow(
+         /is an unspecified \(wildcard\) address, which is not supported/,
+       )
+     }
+@@ -251,6 +251,22 @@ describe('real Loader composition', () => {
+     }
+   })
+ 
++  // dsh#02 fork opt-in: the stock rejection above is the default, and only an
++  // explicit `fork.allowWildcardHost` lifts it, for every spelling.
++  it('accepts a wildcard bind only under the fork.allowWildcardHost opt-in', () => {
++    for (const host of ['0.0.0.0', '::', '::ffff:0.0.0.0']) {
++      expect(HttpServer.Config({ host, port: 0, fork: { allowWildcardHost: true } }).host).toBe(host)
++      expect(() => assertBindHost(host, { allowWildcardHost: true })).not.toThrow()
++      expect(() => assertBindHost(host, { allowWildcardHost: false }))
++        .toThrow(/is an unspecified \(wildcard\) address, which is not supported/)
++      expect(() => assertBindHost(host, undefined))
++        .toThrow(/is an unspecified \(wildcard\) address, which is not supported/)
++    }
++    // The opt-in lifts only the wildcard rule, never the literal rule.
++    expect(() => HttpServer.Config({ host: 'localhost', port: 0, fork: { allowWildcardHost: true } }))
++      .toThrow(/is not a concrete IPv4 or IPv6 address literal/)
++  })
++
+   it('denies the IPv4-mapped wildcard through the real plugin load, not only the predicate', async () => {
+     // The Loader is nontransactional: a rejected config leaves a FAILED fiber
+     // whose await carries the schema error rather than rejecting loader.await().
+-- 
+2.53.0
+
