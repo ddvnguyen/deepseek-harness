@@ -17,6 +17,7 @@ kind: "package-reference"
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
 - [模型体验](#model-experience)
+- [Fork 可选项：通配地址绑定（dsh#02）](#fork-wildcard-host)
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
@@ -118,6 +119,20 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
 #### KV Cache 影响
 
 无；该包既不组装也不发送提供方请求。
+
+<a id="fork-wildcard-host"></a>
+## Fork 可选项：通配地址绑定（dsh#02）
+
+`fork.allowWildcardHost` 是仅由 dsh#02 fork 补丁系列新增的开关；缺省或为 `false` 时保持上游行为不变，即拒绝 `--host 0.0.0.0`（或 `::`）。在 `webserver` 行上设置 `fork.allowWildcardHost`（`dsh-web-app` bundle 会从它的 `web-startup` 行接上），加载时即接受未指定地址。绑定所有接口只在外部边界与 `connection` 行的 `trustedHosts` Host 围栏之后才安全，本选项不改动该围栏，因此请用 `--trusted-host` 列出浏览器使用的所有主机。PROD 不设置该选项。
+
+```yaml
+- id: webserver
+  config:
+    host: 0.0.0.0
+    port: 3080
+    fork:
+      allowWildcardHost: true
+```
 
 ## 已知限制与延期工作
 
