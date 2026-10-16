@@ -12,8 +12,8 @@
   en: 0d1ffed238b25446
   zh: 9f66adce1c593c53
 /deepseek-ai-dsh-host-webserver/table-of-contents:
-  en: d152484eb41ac6b4
-  zh: 09388d293f9be9cb
+  en: c584ce2b287425f5
+  zh: 608b79cbd23bd8d1
 /deepseek-ai-dsh-host-webserver/use-this-package:
   en: 1998834973f7cf17
   zh: 63455a2f75d090ad
@@ -51,8 +51,11 @@
   en: 38887e1f9117e7e5
   zh: 6a6e1a002fac4624
 /deepseek-ai-dsh-host-webserver/model-experience/kv-cache-effect:
-  en: ca75c51c89c2c9b0
-  zh: de54f3467ef3b9be
+  en: 13f41b4c090d6a0a
+  zh: 9106435637f61193
+/deepseek-ai-dsh-host-webserver/fork-opt-in-wildcard-bind-dsh-02:
+  en: 031c8260f84a42cb
+  zh: 29a6af4afd2a6496
 /deepseek-ai-dsh-host-webserver/known-limitations-and-deferred-work:
   en: 9aa6b8cf92d5b506
   zh: 55ee3f6ad1cace50
