@@ -26,6 +26,11 @@
 # evil Host headers, both shas) -> roll back on failure -> prune.
 set -euo pipefail
 
+log() { printf '[deploy %s] %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
+die() { printf '[deploy %s] FATAL: %s\n' "$(date -u +%H:%M:%SZ)" "$*" >&2; exit "$FATAL_EXIT"; }
+die_refusal() { FATAL_EXIT=3; printf '[deploy %s] FATAL: %s\n' "$(date -u +%H:%M:%SZ)" "$*" >&2; exit 3; }
+FATAL_EXIT=1
+
 # TARGET picks the instance. x is the only one armed in this lane; z exists in
 # the script but refuses to run unless DSH_DEPLOY_ALLOW_Z=1 is explicit (the
 # prod-z gate is the human's environment + runner, so nothing arms it by
@@ -33,8 +38,8 @@ set -euo pipefail
 TARGET="${TARGET:-x}"
 case "$TARGET" in
   x) : ;;
-  z) [ "${DSH_DEPLOY_ALLOW_Z:-0}" = "1" ] || die "TARGET=z is not armed: DSH_DEPLOY_ALLOW_Z=1 is required and nothing sets it";;
-  *) die "unknown TARGET [[$TARGET]] (expected x, or z with the explicit flag)";;
+  z) [ "${DSH_DEPLOY_ALLOW_Z:-0}" = "1" ] || die_refusal "TARGET=z is not armed: DSH_DEPLOY_ALLOW_Z=1 is required and nothing sets it";;
+  *) die_refusal "unknown TARGET [[$TARGET]] (expected x, or z with the explicit flag)";;
 esac
 # REPO_ROOT is defaulted first: RELEASE_SHA falls back to the checkout HEAD,
 # so under set -u it must not read REPO_ROOT before the default exists.
@@ -42,6 +47,12 @@ REPO_ROOT="${REPO_ROOT:-/mnt/workspace/dshx-deploy}"
 RELEASE_SHA="${RELEASE_SHA:-$(git -C "$REPO_ROOT" rev-parse HEAD)}"
 HARNESS_ROOT="${HARNESS_ROOT:-/mnt/workspace/dsh02-cert-harness2}"
 HARNESS_SHA="$(git -C "$HARNESS_ROOT" rev-parse HEAD)"
+# Guard against recording a wrong checkout: HARNESS_SHA_EXPECT must equal the
+# pinned checkout HEAD for a real deploy. It is optional only in DRY (where
+# scratch rehearsals may point anywhere); a mismatch dies with exit 4.
+HARNESS_SHA_EXPECT="${HARNESS_SHA_EXPECT:-}"
+[ "${DRY_RUN:-0}" = "1" ] || [ -n "$HARNESS_SHA_EXPECT" ] || { FATAL_EXIT=4; die "HARNESS_SHA_EXPECT is required for a non-DRY deploy (expected HEAD of $HARNESS_ROOT)"; }
+[ -z "$HARNESS_SHA_EXPECT" ] || [ "$HARNESS_SHA" = "$HARNESS_SHA_EXPECT" ] || { FATAL_EXIT=4; die "harness checkout mismatch: $HARNESS_ROOT is $HARNESS_SHA, expected $HARNESS_SHA_EXPECT"; }
 CLOUDS_ROOT="${CLOUDS_ROOT:-/mnt/workspace/clouds}"
 SERVICE="${SERVICE:-dsh-$TARGET}"
 case "$TARGET" in
@@ -71,9 +82,7 @@ HAD_PLACEHOLDER=0
 [ -d "$CURRENT" ] && [ ! -L "$CURRENT" ] && HAD_PLACEHOLDER=1
 TOOK_BACKUP=0
 SWITCHED=0
-PREMIG_PID=""
-log() { printf '[deploy %s] %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
-die() { printf '[deploy %s] FATAL: %s\n' "$(date -u +%H:%M:%SZ)" "$*" >&2; exit 1; }
+REHEARSE_PID=""
 rollback() {
   log "ROLLBACK: stopping $SERVICE"
   systemctl --user stop "$SERVICE" 2>/dev/null || true
@@ -89,7 +98,7 @@ rollback() {
     log "ROLLBACK: no previous release; undid the switch and left current empty"
   fi
   if [ "$TOOK_BACKUP" = "1" ]; then
-    LATEST="$(ls -1t "$BACKUPS"/moct-*.db 2>/dev/null | head -1 || true)"
+    LATEST="$(ls -1t "$BACKUPS"/dsh-state-*.tar.gz 2>/dev/null | head -1 || true)"
     if [ -n "$LATEST" ]; then
       rm -rf "$STATE_HOME"
       mkdir -p "$(dirname "$STATE_HOME")"
@@ -108,7 +117,7 @@ rollback() {
   fi
   log "ROLLBACK: done"
 }
-cleanup() { [ -n "$REHEARSE_PID" ] && kill "$PREMIG_PID" 2>/dev/null; rm -rf "$SCRATCH"; return 0; }
+cleanup() { [ -n "${REHEARSE_PID:-}" ] && kill "$REHEARSE_PID" 2>/dev/null; rm -rf "$SCRATCH"; return 0; }
 
 # Rollback runs on EVERY failing exit path, not just the ones an ERR trap can see.
 # die() calls `exit 1`, and bash never runs an ERR trap for `exit`, so an ERR-only
