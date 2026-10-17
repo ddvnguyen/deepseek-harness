@@ -47,6 +47,11 @@ REPO_ROOT="${REPO_ROOT:-/mnt/workspace/dshx-deploy}"
 RELEASE_SHA="${RELEASE_SHA:-$(git -C "$REPO_ROOT" rev-parse HEAD)}"
 HARNESS_ROOT="${HARNESS_ROOT:-/mnt/workspace/dsh02-cert-harness2}"
 HARNESS_SHA="$(git -C "$HARNESS_ROOT" rev-parse HEAD)"
+
+# The manifest records which repository the fork sha names. Default: derived
+# from the product checkout remote (both shas live in deepseek-harness); a run
+# can override with DSH_REPO_NAME.
+DSH_REPO_NAME="${DSH_REPO_NAME:-$(basename -s .git "$(git -C "$REPO_ROOT" config --get remote.origin.url 2>/dev/null || echo ddvnguyen/deepseek-harness)")}"
 # Guard against recording a wrong checkout: HARNESS_SHA_EXPECT must equal the
 # pinned checkout HEAD for a real deploy. It is optional only in DRY (where
 # scratch rehearsals may point anywhere); a mismatch dies with exit 4.
@@ -224,7 +229,7 @@ else
       harness: { sha: harnessSha },
       packagedAt: new Date().toISOString(),
     }, null, 2) + "\n");
-  ' "$RELEASE_SHA" "$HARNESS_SHA" "ddvnguyen/moct-dsh-team-room" "$RELDIR/manifest.json" \
+  ' "$RELEASE_SHA" "$HARNESS_SHA" "$DSH_REPO_NAME" "$RELDIR/manifest.json" \
     || die "manifest write failed"
   grep -q "$RELEASE_SHA" "$RELDIR/manifest.json" || die "manifest missing the fork sha"
   grep -q "$HARNESS_SHA" "$RELDIR/manifest.json" || die "manifest missing the harness sha"
