@@ -174,7 +174,7 @@ check_host_codes() { # $1 = the host_codes line -> trusted 200, evil 403
 # --- 0. preflight -----------------------------------------------------------
 [ -f "$UNIT_FILE" ] || die "unit file missing: $UNIT_FILE (create it first)"
 [ -f "$REPO_ROOT/apps/cli/lib/bin.js" ] || die "no built apps/cli/lib/bin.js in $REPO_ROOT — run the build step first"
-[ -d "$HARNESS_ROOT/.git" ] || die "harness checkout missing: $HARNESS_ROOT"
+[ -e "$HARNESS_ROOT/.git" ] || die "harness checkout missing: $HARNESS_ROOT"
 case "$PORT" in 3080|3081|8099|8110|18081|18789|4097|8210) die "refusing to use protected port $PORT"; esac
 [ "$PORT" != "3181" ] || [ "$TARGET" = "x" ] || die "port 3181 is the DSH-X port; TARGET=z uses 3180"
 [ "$PORT" != "3180" ] || [ "$TARGET" = "z" ] || die "port 3180 is the DSH-Z port; TARGET=x uses 3181"
