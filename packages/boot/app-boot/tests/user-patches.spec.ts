@@ -352,6 +352,26 @@ describe('profile reconciliation settlement', () => {
     await expect(reconcileProfilePatches(ctx, [], NAME)).rejects.toThrow('profile reload requires the root Include entry')
   })
 
+  it('adopts the pinned root Include entry from the Loader when the remember is module-local-empty', async () => {
+    // The deployed fork shape: a profile install's configEditor resolves its
+    // own @deepseek-ai/dsh-app-boot copy over the same Loader tree, so its
+    // WeakMap remember is empty although the tree is healthy. Mount the
+    // bootstrap include exactly as mountRootInclude does but WITHOUT the
+    // remember, then reconcile — the pinned id must restore the entry.
+    const dir = tmp()
+    writeFileSync(join(dir, 'noop.mjs'), 'export function apply() {}\n')
+    writeFileSync(join(dir, 'cordis.yml'), '[]\n')
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    ctx.baseUrl = pathToFileURL(dir).href + '/'
+    await ctx.plugin(Loader)
+    ctx.loader.builtins.include = Include
+    const rootInclude = { id: 'include', name: 'cordis:include', config: { path: pathToFileURL(join(dir, 'cordis.yml')).href } }
+    await ctx.loader.create(rootInclude)
+    await ctx.loader.await()
+    await expect(reconcileProfilePatches(ctx, [], NAME)).resolves.toEqual([])
+  })
+
   it('removes a previously failed entry without reporting its old activation error', async () => {
     const dir = tmp()
     writeFileSync(join(dir, 'cordis.yml'), '[]\n')
