@@ -1,0 +1,84 @@
+# DSH deploy - dispatch-only workflow (Pipeline 2 follow-up; base: dsh#02 bfcd04bd).
+# One workflow, two target branches. x is armed on the existing standby runner
+# labels; z stays unarmed: its step needs the NOT-advertised prod label and the
+# human's prod-z environment gate, so it queues forever until the human arms it.
+# The dsh-clouds unit stays disabled and untouched (a duplicate unit over one
+# registration - Architect ruling, CI/CD lane).
+#
+# The deploy script runs from the REVIEWED dsh#02 sha (github.sha), checked out
+# into ./deploy-scripts: the product checkout at fork_sha never supplies the
+# script, so a dispatched sha cannot run unreviewed deploy code. REPO_ROOT stays
+# the product tree; the collection of deploy vars is pushed through env:.
+name: deploy-dsh
+"on":
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "deploy target: x (dsh-x.ddvnguyen.com:3181) or z (dsh-z.ddvnguyen.com:3180, unarmed)"
+        type: choice
+        default: x
+        options: [x, z]
+      fork_sha:
+        description: "full 40-char sha of the product commit to package (deepseek-harness)"
+        required: true
+
+# one dispatch at a time; the runner serialises against the standby push job
+concurrency:
+  group: dsh-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-x:
+    if: inputs.target == 'x'
+    runs-on: [self-hosted, linux, x64, vm-backup]
+    env:
+      FORK_SHA: ${{ inputs.fork_sha }}
+      DRY_RUN: "0"
+    steps:
+      - name: validate FORK_SHA (strict 40-hex; no untrusted interpolation into shell)
+        run: echo "$FORK_SHA" | grep -Eq "^[0-9a-f]{40}$" || { echo "fork_sha must be a full 40-char sha"; exit 4; }
+      - name: checkout product at FORK_SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.fork_sha }}
+        id: product
+      - name: assert the checked-out sha equals FORK_SHA (env-read, not inline)
+        run: test "$(git rev-parse HEAD)" = "$FORK_SHA" || { echo "sha mismatch"; exit 4; }
+      - name: checkout the reviewed workflow ref with the deploy scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: deploy-scripts
+      - name: install deps
+        run: pnpm install --frozen-lockfile
+      - name: build product
+        run: pnpm run build
+      - name: checkout harness pin
+        uses: actions/checkout@v4
+        with:
+          ref: 19caaf271abf0d380f48d125b1d9548a53be8793
+          path: harness-pin
+      - name: deploy (TARGET=x; script from the reviewed ref, product tree as-is)
+        run: bash deploy-scripts/scripts/deploy/dsh-deploy.sh
+        env:
+          TARGET: x
+          DRY_RUN: ${{ env.DRY_RUN }}
+          REPO_ROOT: ${{ github.workspace }}
+          HARNESS_ROOT: ${{ github.workspace }}/harness-pin
+          HARNESS_SHA_EXPECT: 19caaf271abf0d380f48d125b1d9548a53be8793
+          TRUSTED_HOST: dsh-x.ddvnguyen.com
+          GITHUB_REPOSITORY: ${{ github.repository }}
+  deploy-z:
+    if: inputs.target == 'z'
+    # UNARMED by design: no runner advertises prod, so this never schedules;
+    # the prod-z environment gates approval once the human arms it.
+    environment: prod-z
+    runs-on: [self-hosted, prod]
+    steps:
+      - name: refusal step (target z is not armed)
+        run: |
+          echo "TARGET=z is unarmed: arming needs this file edited + a runner with the prod label + prod-z created."
+          exit 3
