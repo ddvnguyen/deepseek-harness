@@ -254,8 +254,14 @@ rm -rf "$SCRATCH"; mkdir -p "$SCRATCH/home/profiles/web" "$SCRATCH/state"
 if [ -f "$STATE_HOME/state.json" ] || [ -d "$STATE_HOME/profiles" ]; then
   cp -a "$STATE_HOME"/. "$SCRATCH/home"/ 2>/dev/null || true
 fi
-rm -rf "$SCRATCH/home/profiles/web/node_modules"
-cp -al "$RELDIR/node_modules" "$SCRATCH/home/profiles/web/node_modules"
+# The profile's own node_modules carries the installed plugins; the release
+# tree only carries the harness. Rehearse against the profile tree the unit
+# will actually use. Replacing it with the release tree made every plugin
+# unresolvable in rehearsal (run 39128750188: codex-ui and the rest "cannot
+# resolve profile bundle") and the boot died before serving GET /.
+if [ ! -d "$SCRATCH/home/profiles/web/node_modules" ]; then
+  cp -al "$RELDIR/node_modules" "$SCRATCH/home/profiles/web/node_modules"
+fi
 ln -sfn "$RELDIR" "$SCRATCH/current"
 REHEARSE_PORT="$(free_port)"
 (
