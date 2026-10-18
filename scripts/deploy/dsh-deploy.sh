@@ -178,6 +178,12 @@ check_host_codes() { # $1 = the host_codes line -> trusted 200, evil 403
 
 # --- 0. preflight -----------------------------------------------------------
 [ -f "$UNIT_FILE" ] || die "unit file missing: $UNIT_FILE (create it first)"
+# The listen address lives only in the unit. A unit that drifted back to
+# 127.0.0.1 deploys "successfully" and is then unreachable from the LAN, which
+# is exactly how dsh-x looked healthy on localhost while the public hostname
+# refused every request.
+grep -q -- '--host 0\.0\.0\.0' "$UNIT_FILE" \
+  || die "unit $UNIT_FILE does not bind 0.0.0.0; add --host 0.0.0.0 to ExecStart"
 [ -f "$REPO_ROOT/apps/cli/lib/bin.js" ] || die "no built apps/cli/lib/bin.js in $REPO_ROOT — run the build step first"
 [ -e "$HARNESS_ROOT/.git" ] || die "harness checkout missing: $HARNESS_ROOT"
 case "$PORT" in 3080|3081|8099|8110|18081|18789|4097|8210) die "refusing to use protected port $PORT"; esac
@@ -200,6 +206,11 @@ if [ ! -f "$PATCH_FILE" ]; then
 YAML
   log "wrote the boot patch $PATCH_FILE"
 fi
+# The patch is only written when absent, so a pre-existing overlay can silently
+# lack the wildcard flag; without it a Host header that is not in trustedHosts
+# is refused even though the unit listens on every interface.
+grep -q 'allowWildcardHost: true' "$PATCH_FILE" \
+  || die "overlay $PATCH_FILE is missing allowWildcardHost: true"
 log "deploying fork sha $RELEASE_SHA with harness sha $HARNESS_SHA in the manifest"
 [ "${DRY_RUN:-0}" = "1" ] && log "DRY_RUN=1 — will stop after the rehearsal, nothing live changes"
 
