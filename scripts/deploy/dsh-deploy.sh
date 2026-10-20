@@ -288,9 +288,17 @@ esac
 [ -d "$PROFILE_DIR" ] || die "lane profile missing: $PROFILE_DIR (install the lane customizations before deploying)"
 [ -f "$PROFILE_DIR/package.json" ] || die "lane profile is not a DSH profile (no package.json): $PROFILE_DIR"
 mkdir -p "$CLOUDS_ROOT/$SERVICE/releases" "$CLOUDS_ROOT/$SERVICE/data" "$STATE_HOME" "$BACKUPS" "$LOGDIR"
-# The boot patch is written once from the script itself so it can never drift
+# The boot patch is written from the script itself so it can never drift
 # from what the smoke tests: trustedHosts stays wired to the webStartup ctx.
-if [ ! -f "$PATCH_FILE" ]; then
+#
+# It is refreshed, not only created. A stale overlay is how the live lane
+# crash-looped once: the harness refuses an unspecified (wildcard) bind
+# address unless the patch grants allowWildcardHost, and a unit that binds
+# 0.0.0.0 with an overlay that does not grant it makes the process exit 1 on
+# every start — the lane then answers nothing and the public hostname is down
+# until someone notices. The patch is therefore rewritten whenever it does
+# not carry the key, and the unit/overlay pair is checked before the switch.
+if [ ! -f "$PATCH_FILE" ] || ! grep -q 'allowWildcardHost: true' "$PATCH_FILE"; then
   cat > "$PATCH_FILE" <<'YAML'
 - id: web-startup
   config:
@@ -304,6 +312,21 @@ if [ ! -f "$PATCH_FILE" ]; then
 YAML
   log "wrote the boot patch $PATCH_FILE"
 fi
+# The unit's bind address decides whether the release accepts it: a wildcard
+# address needs the patch's allowWildcardHost, a concrete address does not.
+# The rehearsal binds 127.0.0.1, so it cannot catch a wildcard refusal; this
+# check does, and it fails with the live lane untouched.
+UNIT_HOST="$(sed -n 's/^ExecStart=.*--host \([^ ]*\) .*/\1/p' "$UNIT_FILE" 2>/dev/null | head -1)"
+case "$UNIT_HOST" in
+  0.0.0.0|::|'[::]'|'')
+    grep -q 'allowWildcardHost: true' "$PATCH_FILE" \
+      || die "the unit binds '${UNIT_HOST:-<none>}' but $PATCH_FILE does not grant allowWildcardHost: true - the release would refuse the bind and the lane would crash-loop after the switch"
+    log "unit binds ${UNIT_HOST:-<none>} and the boot patch grants the wildcard bind"
+    ;;
+  *)
+    log "unit binds the concrete address $UNIT_HOST"
+    ;;
+esac
 log "deploying fork sha $RELEASE_SHA with harness sha $HARNESS_SHA in the manifest"
 
 # --- 1. package the release -------------------------------------------------
