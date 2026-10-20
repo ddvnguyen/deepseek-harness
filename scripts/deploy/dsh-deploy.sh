@@ -339,7 +339,12 @@ if [ -f "$STATE_HOME/state.json" ] || [ -d "$STATE_HOME/profiles" ]; then
   cp -a "$STATE_HOME"/. "$SCRATCH/home"/ 2>/dev/null || true
 fi
 rm -rf "$SCRATCH/home/profiles/web/node_modules"
-cp -al "$RELDIR/node_modules" "$SCRATCH/home/profiles/web/node_modules"
+# The rehearsal boots the lane's own profile tree, so the profile's node_modules
+# is what it needs: the profile bundles (codex-ui, the Team Room packages, the
+# sidebar plugin) live there, not in the release's workspace tree. Without them
+# the boot cannot resolve a single profile bundle and the rehearsal fails
+# before the switch, with the live lane untouched.
+cp -al "$PROFILE_DIR/node_modules" "$SCRATCH/home/profiles/web/node_modules"
 ln -sfn "$RELDIR" "$SCRATCH/current"
 REHEARSE_PORT="$(free_port)"
 (
