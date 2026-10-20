@@ -126,7 +126,7 @@ UNIT_FILE="${UNIT_FILE:-/home/ddv/.config/systemd/user/$SERVICE.service}"
 # a wildcard bind, so the lane binds one concrete address (the host's podman
 # bridge, which is where the Cloudflare tunnel dials), and a smoke on
 # 127.0.0.1 would never reach it.
-LANE_HOST="$(sed -n 's/.*--host \([^ ]*\) .*/\1/p' "$UNIT_FILE" 2>/dev/null | head -1)"
+LANE_HOST="$(sed -n 's/^ExecStart=.*--host \([^ ]*\) .*/\1/p' "$UNIT_FILE" 2>/dev/null | head -1)"
 [ -n "$LANE_HOST" ] || LANE_HOST="127.0.0.1"
 BASE_URL="http://$LANE_HOST:$PORT"
 PATCH_FILE="$CLOUDS_ROOT/$SERVICE/data/overlay.yml"
