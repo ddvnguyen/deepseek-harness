@@ -76,6 +76,9 @@ jobs:
             exit 0
           fi
           git fetch --tags --force origin
+          # An annotated tag needs a tagger identity; the runner has none.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" "$SHA" -m "Snapshot $TAG (integration @ $SHA)"
           git push origin "refs/tags/$TAG"
           echo "cut $TAG -> $SHA"
