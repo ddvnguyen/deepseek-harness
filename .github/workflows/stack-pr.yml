@@ -1,0 +1,228 @@
+# Maintains the STACK PR: `integration` -> the released branch (`master`).
+#
+# The stack PR is the one door through which the train reaches a released
+# branch. It is not a per-day PR: `integration` rolls forward and the stack
+# PR always shows the whole unreleased delta.
+#
+# Rules:
+#   - No new commit on `integration` since the released branch -> no PR, no
+#     PR edit, exit 0.
+#   - An open PR for the same head/base is refreshed (body), never duplicated.
+#   - Auto-merge is only requested when every implementation PR of the stack
+#     is merged, or carries an approving review AND a green CI check.
+#     Otherwise the blocking PRs are listed and a human merges.
+#
+# Same behaviour as the moct repo's stack-pr workflow; only the released
+# branch differs (`master` here, `main` there). The CI check the guard looks
+# for is the aggregate one of this repo's ci.yml ("all checks passed"), with
+# "ci" accepted as well.
+name: stack-pr
+
+"on":
+  workflow_dispatch:
+  schedule:
+    - cron: '17,47 * * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: stack-pr
+  cancel-in-progress: false
+
+jobs:
+  stack:
+    name: stack-pr
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_BRANCH: integration
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the branches and the skip rule
+        id: resolve
+        run: |
+          set -euo pipefail
+          BASE="$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          git fetch --no-tags origin "$BASE" "$HEAD_BRANCH"
+          AHEAD="$(git rev-list --count "origin/$BASE..origin/$HEAD_BRANCH")"
+          # The rule is CONTENT, not the commit count. A merge commit on the
+          # released branch makes `rev-list --count base..head` differ even
+          # when both trees are identical, and a count-based rule would then
+          # open a stack PR for an empty diff on every run.
+          if git diff --quiet "origin/$BASE" "origin/$HEAD_BRANCH"; then
+            SAME=1
+          else
+            SAME=0
+          fi
+          echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
+          echo "same=$SAME" >> "$GITHUB_OUTPUT"
+          echo "base=$BASE ahead=$AHEAD same_tree=$SAME"
+          if [ "$SAME" -eq 1 ]; then
+            echo "nothing to promote: $BASE and $HEAD_BRANCH hold the same tree - no PR is created and no PR is touched"
+          fi
+
+      - name: Skip when there is nothing to stack
+        if: steps.resolve.outputs.same == '1'
+        run: |
+          set -euo pipefail
+          echo "nothing to promote: ${{ steps.resolve.outputs.base }} and integration hold the same tree"
+
+      - name: Build the stack body
+        if: steps.resolve.outputs.same != '1'
+        id: body
+        run: |
+          set -euo pipefail
+          BASE="${{ steps.resolve.outputs.base }}"
+          SHA="$(git rev-parse "origin/$HEAD_BRANCH")"
+          BODY="$RUNNER_TEMP/stack-pr-body.md"
+          {
+            echo "## Stack: \`$HEAD_BRANCH\` -> \`$BASE\`"
+            echo
+            echo "Head sha: \`$SHA\`"
+            echo
+            echo "### Implementation PRs (base: \`$HEAD_BRANCH\`)"
+            echo
+            if PR_LIST="$(gh pr list --base "$HEAD_BRANCH" --state all --limit 50 \
+                  --json number,title,state,author,reviewDecision,statusCheckRollup,mergedAt)"; then
+              if [ "$(printf '%s' "$PR_LIST" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const a=JSON.parse(s);console.log(a.length?"":"none")})')" = "none" ]; then
+                echo "_no implementation PR in the stack_"
+              else
+                printf '%s' "$PR_LIST" | node -e '
+                  let s="";
+                  process.stdin.on("data", d => s += d).on("end", () => {
+                    const prs = JSON.parse(s);
+                    for (const pr of prs) {
+                      const checks = (pr.statusCheckRollup || []).map(c => `${c.name || c.context || c.workflowName || "check"}:${c.conclusion || c.state || c.status}`).join(", ");
+                      const line = `- #${pr.number} ${pr.title} _(state: ${pr.state}; review: ${pr.reviewDecision || "none"})_` + (checks ? ` — checks: ${checks}` : "");
+                      console.log(line);
+                    }
+                  });'
+              fi
+            else
+              echo "_could not list the implementation PRs_"
+            fi
+            echo
+            echo "### Commits (\`$BASE..$HEAD_BRANCH\`)"
+            echo
+            echo '```'
+            git log --oneline --no-decorate "origin/$BASE..origin/$HEAD_BRANCH"
+            echo '```'
+            echo
+            echo "### Diffstat"
+            echo
+            echo '```'
+            git diff --stat "origin/$BASE...origin/$HEAD_BRANCH"
+            echo '```'
+            echo
+            echo "### Deploy evidence"
+            echo
+            TOKEN="$(date -u +%d%b%y)"
+            EVIDENCE=""
+            while read -r TAG_SHA PEELED_SHA TAG_REF; do
+              [ -n "${PEELED_SHA:-}" ] || continue
+              if [ "$PEELED_SHA" = "$SHA" ]; then
+                EVIDENCE="\`$TAG_REF\` -> \`$SHA\` (tag object \`$TAG_SHA\`)"
+                break
+              fi
+            done < <(git ls-remote --tags origin 'refs/tags/snapshot/*')
+            if [ -n "$EVIDENCE" ]; then
+              echo "Deploy evidence: $EVIDENCE"
+            else
+              echo "Deploy evidence: none yet for \`$SHA\` - no \`snapshot/*\` tag points at this head (today's token would be \`snapshot/$TOKEN\`)."
+            fi
+            echo
+            echo "_Opened by \`.github/workflows/stack-pr.yml\`. Merged only when the stack guard passes; otherwise a human merges._"
+          } > "$BODY"
+          echo "body=$BODY" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Create or refresh the stack PR
+        if: steps.resolve.outputs.same != '1'
+        id: pr
+        run: |
+          set -euo pipefail
+          BASE="${{ steps.resolve.outputs.base }}"
+          BODY="${{ steps.body.outputs.body }}"
+          SHA="${{ steps.body.outputs.sha }}"
+          OPEN_PR="$(gh pr list --base "$BASE" --head "$HEAD_BRANCH" --state open --json number -q '.[0].number' 2>/dev/null || true)"
+          if [ -n "$OPEN_PR" ] && [ "$OPEN_PR" != "null" ]; then
+            echo "refreshing the open stack PR #$OPEN_PR"
+            gh pr edit "$OPEN_PR" --body-file "$BODY"
+            echo "number=$OPEN_PR" >> "$GITHUB_OUTPUT"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CLOSED_PR="$(gh pr list --base "$BASE" --head "$HEAD_BRANCH" --state closed --json number,headRefOid -q ".[] | select(.headRefOid == \"$SHA\") | .number" 2>/dev/null | head -n 1 || true)"
+          if [ -n "$CLOSED_PR" ]; then
+            echo "reopening the closed stack PR #$CLOSED_PR (same head sha - no second PR)"
+            gh pr reopen "$CLOSED_PR"
+            gh pr edit "$CLOSED_PR" --body-file "$BODY"
+            echo "number=$CLOSED_PR" >> "$GITHUB_OUTPUT"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TITLE="Stack: $HEAD_BRANCH -> $BASE"
+          gh pr create --base "$BASE" --head "$HEAD_BRANCH" --title "$TITLE" --body-file "$BODY"
+          NEW_PR="$(gh pr list --base "$BASE" --head "$HEAD_BRANCH" --state open --json number -q '.[0].number')"
+          echo "number=$NEW_PR" >> "$GITHUB_OUTPUT"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Stack guard
+        if: steps.resolve.outputs.same != '1'
+        id: guard
+        run: |
+          set -euo pipefail
+          PR="${{ steps.pr.outputs.number }}"
+          STACK="$(gh pr list --base "$HEAD_BRANCH" --state all --limit 50 --json number,title,state,mergedAt,reviewDecision,statusCheckRollup)"
+          RESULT="$(printf '%s' "$STACK" | node -e '
+            let s = "";
+            process.stdin.on("data", d => s += d).on("end", () => {
+              const prs = JSON.parse(s);
+              const blocking = [];
+              for (const pr of prs) {
+                if (pr.state === "MERGED") continue;
+                const approved = pr.reviewDecision === "APPROVED";
+                const checks = pr.statusCheckRollup || [];
+                const ci = checks.find(c => {
+                  const name = c.name || c.context || c.workflowName || "";
+                  return name === "ci" || name === "all checks passed";
+                });
+                const green = !!ci && (ci.conclusion === "SUCCESS" || ci.state === "SUCCESS");
+                if (!(approved && green)) blocking.push(`#${pr.number} ${pr.title} (review: ${pr.reviewDecision || "none"}, ci: ${ci ? (ci.conclusion || ci.state || ci.status) : "missing"})`);
+              }
+              console.log(JSON.stringify({ blocking }));
+            });')"
+          BLOCKING="$(printf '%s' "$RESULT" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).blocking.join("\n")))')"
+          if [ -z "$BLOCKING" ]; then
+            echo "stack guard: every implementation PR is merged, or approved with a green ci check"
+            echo "mergeable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stack guard: the stack is NOT auto-mergeable yet. Blocking PRs:"
+            while IFS= read -r line; do
+              [ -n "$line" ] && echo "  - $line"
+            done <<< "$BLOCKING"
+            echo "A human merges the stack PR #$PR."
+            echo "mergeable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Request auto-merge
+        if: steps.resolve.outputs.same != '1' && steps.guard.outputs.mergeable == 'true'
+        run: |
+          set -euo pipefail
+          PR="${{ steps.pr.outputs.number }}"
+          if ! OUT="$(gh pr merge "$PR" --auto --merge 2>&1)"; then
+            echo "GitHub refused the auto-merge request for #$PR:" >&2
+            echo "$OUT" >&2
+            echo "Enable 'Allow auto-merge' in the repository settings, or merge PR #$PR by hand." >&2
+            exit 1
+          fi
+          echo "$OUT"
+          echo "auto-merge requested for #$PR"

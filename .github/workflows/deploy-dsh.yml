@@ -1,20 +1,32 @@
-# DSH deploy - dispatch-only workflow (Pipeline 2 follow-up; base: dsh#02 bfcd04bd).
-# One workflow, two target branches. x is armed on the existing standby runner
-# labels; z stays unarmed: its step needs the NOT-advertised prod label and the
-# human's prod-z environment gate, so it queues forever until the human arms it.
-# The dsh-clouds unit stays disabled and untouched (a duplicate unit over one
-# registration - Architect ruling, CI/CD lane).
+# DSH deploy - dispatch-only workflow for the fork's own lanes.
 #
-# The deploy script runs from the REVIEWED dsh#02 sha (github.sha), checked out
-# into ./deploy-scripts: the product checkout at fork_sha never supplies the
+# One workflow, two lanes, both real: x (dsh-x.ddvnguyen.com:3181) and z
+# (dsh-z.ddvnguyen.com:3180). Both are rotating TEST lanes; z is no longer
+# "unarmed" and is deployed exactly like x, with TARGET=z.
+#
+# The PROD lane is out of scope for this file: it is the stock upstream harness
+# on :3080, it is reached through the `prod` runner label and the `prod-z`
+# environment, and neither is referenced here. No job below can schedule onto
+# the `prod` runner or into the `prod-z` environment - those stay reserved for
+# the unarmed PROD lane.
+#
+# The deploy script runs from the REVIEWED ref (github.sha), checked out into
+# ./deploy-scripts: the product checkout at fork_sha never supplies the
 # script, so a dispatched sha cannot run unreviewed deploy code. REPO_ROOT stays
 # the product tree; the collection of deploy vars is pushed through env:.
+#
+# The former `target` input is now `lane` (same x|z choices, default x).
+#
+# The moct repo owns the train and drives the FULL lane deploy (customizations
+# + release) from deploy/dsh-customizations.json and deploy/train-repos.json.
+# This file keeps the fork's own dispatch entry point working and consistent
+# with it.
 name: deploy-dsh
 "on":
   workflow_dispatch:
     inputs:
-      target:
-        description: "deploy target: x (dsh-x.ddvnguyen.com:3181) or z (dsh-z.ddvnguyen.com:3180, unarmed)"
+      lane:
+        description: "lane to deploy: x (dsh-x.ddvnguyen.com:3181) or z (dsh-z.ddvnguyen.com:3180)"
         type: choice
         default: x
         options: [x, z]
@@ -32,14 +44,29 @@ permissions:
 
 jobs:
   deploy-x:
-    if: inputs.target == 'x'
+    if: inputs.lane == 'x'
     runs-on: [self-hosted, linux, x64, vm-backup]
     env:
       FORK_SHA: ${{ inputs.fork_sha }}
+      LANE: ${{ inputs.lane }}
       DRY_RUN: "0"
     steps:
       - name: validate FORK_SHA (strict 40-hex; no untrusted interpolation into shell)
         run: echo "$FORK_SHA" | grep -Eq "^[0-9a-f]{40}$" || { echo "fork_sha must be a full 40-char sha"; exit 4; }
+      - name: validate the lane (only the two rotating test lanes; never prod)
+        run: |
+          set -euo pipefail
+          case "$LANE" in
+            x) PORT=3181 ;;
+            z) PORT=3180 ;;
+            *) echo "unknown lane [$LANE]: only x and z are in scope"; exit 4 ;;
+          esac
+          # The PROD lane (3080), the TEST fleet (3081, 8110) and MOCT-X (8210)
+          # are never deployed from here.
+          case "$PORT" in
+            3080|3081|8110|8210) echo "refusing to deploy on protected port $PORT"; exit 3 ;;
+          esac
+          echo "deploying lane $LANE on port $PORT"
       - name: checkout product at FORK_SHA
         uses: actions/checkout@v4
         with:
@@ -69,16 +96,66 @@ jobs:
           REPO_ROOT: ${{ github.workspace }}
           HARNESS_ROOT: ${{ github.workspace }}/harness-pin
           HARNESS_SHA_EXPECT: 19caaf271abf0d380f48d125b1d9548a53be8793
+          CLOUDS_ROOT: /mnt/workspace/clouds
+          SERVICE: dsh-x
           TRUSTED_HOST: dsh-x.ddvnguyen.com
           GITHUB_REPOSITORY: ${{ github.repository }}
   deploy-z:
-    if: inputs.target == 'z'
-    # UNARMED by design: no runner advertises prod, so this never schedules;
-    # the prod-z environment gates approval once the human arms it.
-    environment: prod-z
-    runs-on: [self-hosted, prod]
+    if: inputs.lane == 'z'
+    # Lane z is a rotating TEST lane, not PROD: same runner labels as lane x,
+    # no `prod` label and no `prod-z` environment. It deploys with TARGET=z.
+    runs-on: [self-hosted, linux, x64, vm-backup]
+    env:
+      FORK_SHA: ${{ inputs.fork_sha }}
+      LANE: ${{ inputs.lane }}
+      DRY_RUN: "0"
     steps:
-      - name: refusal step (target z is not armed)
+      - name: validate FORK_SHA (strict 40-hex; no untrusted interpolation into shell)
+        run: echo "$FORK_SHA" | grep -Eq "^[0-9a-f]{40}$" || { echo "fork_sha must be a full 40-char sha"; exit 4; }
+      - name: validate the lane (only the two rotating test lanes; never prod)
         run: |
-          echo "TARGET=z is unarmed: arming needs this file edited + a runner with the prod label + prod-z created."
-          exit 3
+          set -euo pipefail
+          case "$LANE" in
+            x) PORT=3181 ;;
+            z) PORT=3180 ;;
+            *) echo "unknown lane [$LANE]: only x and z are in scope"; exit 4 ;;
+          esac
+          # The PROD lane (3080), the TEST fleet (3081, 8110) and MOCT-X (8210)
+          # are never deployed from here.
+          case "$PORT" in
+            3080|3081|8110|8210) echo "refusing to deploy on protected port $PORT"; exit 3 ;;
+          esac
+          echo "deploying lane $LANE on port $PORT"
+      - name: checkout product at FORK_SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.fork_sha }}
+        id: product
+      - name: assert the checked-out sha equals FORK_SHA (env-read, not inline)
+        run: test "$(git rev-parse HEAD)" = "$FORK_SHA" || { echo "sha mismatch"; exit 4; }
+      - name: checkout the reviewed workflow ref with the deploy scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: deploy-scripts
+      - name: install deps
+        run: pnpm install --frozen-lockfile
+      - name: build product
+        run: pnpm run build
+      - name: checkout harness pin
+        uses: actions/checkout@v4
+        with:
+          ref: 19caaf271abf0d380f48d125b1d9548a53be8793
+          path: harness-pin
+      - name: deploy (TARGET=z; script from the reviewed ref, product tree as-is)
+        run: bash deploy-scripts/scripts/deploy/dsh-deploy.sh
+        env:
+          TARGET: z
+          DRY_RUN: ${{ env.DRY_RUN }}
+          REPO_ROOT: ${{ github.workspace }}
+          HARNESS_ROOT: ${{ github.workspace }}/harness-pin
+          HARNESS_SHA_EXPECT: 19caaf271abf0d380f48d125b1d9548a53be8793
+          CLOUDS_ROOT: /mnt/workspace/clouds
+          SERVICE: dsh-z
+          TRUSTED_HOST: dsh-z.ddvnguyen.com
+          GITHUB_REPOSITORY: ${{ github.repository }}
