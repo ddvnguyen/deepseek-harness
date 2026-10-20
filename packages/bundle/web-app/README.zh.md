@@ -20,6 +20,7 @@ kind: "package-bundle"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
+- [Fork 可选项：通配地址绑定（dsh#02）](#fork-wildcard-host)
 - [模型体验](#model-experience)
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
@@ -142,6 +143,18 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-app)——每个受支持配置字段及其源声明。
 
 -----
+
+<a id="fork-wildcard-host"></a>
+## Fork 可选项：通配地址绑定（dsh#02）
+
+`fork.allowWildcardHost` 是仅由 dsh#02 fork 补丁系列新增的开关；缺省或为 `false` 时保持上游行为不变，即拒绝 `--host 0.0.0.0`（或 `::`）。在 `web-startup` 行上设置后，命令行接受未指定地址的 `--host`，bundle 再把它传给 `webserver` 行去绑定。绑定所有接口只在外部边界与 `connection` 行的 `trustedHosts` Host 围栏之后才安全，本选项不改动该围栏，因此请用 `--trusted-host` 列出浏览器使用的所有主机。PROD 不设置该选项。
+
+```yaml
+- id: web-startup
+  config:
+    fork:
+      allowWildcardHost: true
+```
 
 <a id="model-experience"></a>
 ## 模型体验

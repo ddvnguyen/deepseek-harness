@@ -16,6 +16,7 @@ Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http`
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further Exploration](#further-exploration)
+- [Fork opt-in: wildcard bind (dsh#02)](#fork-wildcard-host)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
@@ -109,6 +110,20 @@ Read these when the server contract is not enough: the subsystem reference, then
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-host-webserver) — every accepted config field and its source declaration.
 
 -----
+
+<a id="fork-wildcard-host"></a>
+## Fork opt-in: wildcard bind (dsh#02)
+
+`fork.allowWildcardHost` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`: `--host 0.0.0.0` (or `::`) is refused. Set `fork.allowWildcardHost` on the `webserver` row (the `dsh-web-app` bundle wires it from its `web-startup` row) and the unspecified address is accepted at load. Binding every interface is safe only behind an external perimeter and the `connection` row's `trustedHosts` Host fence, which this option leaves untouched, so list every authority browsers use with `--trusted-host`. PROD does not set it.
+
+```yaml
+- id: webserver
+  config:
+    host: 0.0.0.0
+    port: 3080
+    fork:
+      allowWildcardHost: true
+```
 
 <a id="model-experience"></a>
 ## Model Experience

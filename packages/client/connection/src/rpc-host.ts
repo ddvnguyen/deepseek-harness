@@ -83,11 +83,13 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * @param ctx - owning Connection plugin context.
    * @param trustedHosts - deployment authorities accepted by the Host/Origin fence.
    * @param browserAuth - process token and persistent browser-session owner.
+   * @param noAuth - dsh#02 fork opt-in: a Host-fenced request needs no token or cookie.
    */
   constructor(
     ctx: Context,
     private readonly trustedHosts: readonly string[],
     private readonly browserAuth: BrowserAuth,
+    private readonly noAuth = false,
   ) {
     super(ctx, 'connection')
     this.owner = ctx
@@ -133,7 +135,10 @@ export class HostConnectionService extends Service implements HostConnectionHand
     if (this.browserAuth.isAuthenticated(request, secure)) return { peer: this.browserPeer }
     const id = this.browserAuth.authenticateApi(request, secure)
     const record = id === undefined ? undefined : this.peers.get(id)
-    return record === undefined ? { rejection: 401 } : { peer: record.peer }
+    if (record !== undefined) return { peer: record.peer }
+    // dsh#02 fork.noAuth: the Host fence above is the only gate; the request
+    // shares the owner browser Peer a cookie-authenticated browser would get.
+    return this.noAuth ? { peer: this.browserPeer } : { rejection: 401 }
   }
 
   /** Create one in-process Peer owned by the Context that read this service. */
@@ -191,6 +196,14 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * Authenticate an index request; native TLS listeners mint Secure cookies.
    */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
+    if (this.noAuth) {
+      // dsh#02 fork.noAuth: serve the index to any Host the fence trusts, with
+      // or without a token; an untrusted Host is refused outright.
+      if (this.isTrusted(request)) return true
+      response.writeHead(403, { 'cache-control': 'no-store', 'content-type': 'text/plain; charset=utf-8' })
+      response.end(request.method === 'HEAD' ? undefined : 'forbidden')
+      return false
+    }
     return this.browserAuth.authorizeIndex(request, response, this.ctx.get('webServer')?.protocol === 'https:')
   }
 

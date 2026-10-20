@@ -311,6 +311,33 @@ export function recomposeProfile(
 }
 
 /**
+ * Resolve the pinned root Include entry straight from the Loader when the module-local remember misses.
+ * The remember is a WeakMap keyed by the Context on THIS module instance, but a deployed profile can host
+ * plugins that resolve a second copy of this package (a profile install's configEditor runs there) over the
+ * same Loader tree - those copies always see an empty remember, and a settings write then refused with
+ * `profile reload requires the root Include entry` against a perfectly healthy tree. `mountRootInclude`
+ * mounts the bootstrap include under the pinned id `include` in the root tree, so the Loader resolves it
+ * deterministically; nested Includes are keyed under their parent id and never collide with it.
+ * Re-remembering the adopted entry keeps later reloads on the fast path. Returns `undefined` when no root
+ * Include exists - the caller keeps the original refusal.
+ */
+function restoreBootstrapInclude(ctx: Context, binName: string): Entry | undefined {
+  const loader = ctx.get('loader')
+  if (loader === undefined) return undefined
+  try {
+    const entry = loader.resolve('include')
+    if (entry.options.name !== 'cordis:include') return undefined
+    bootstrapIncludes.set(ctx, entry)
+    ctx.logger.warn(
+      '%s: re-adopted the pinned root Include entry from the Loader (this copy of @deepseek-ai/dsh-app-boot had no remembered include)',
+      binName,
+    )
+    return entry
+  } catch {
+    return undefined
+  }
+}
+/**
  * Apply a complete patch list to the root Include and judge activation, leaving the runtime resolution and entries
  * whose import failed as they are.
  * @param ctx Booted root context.
@@ -333,7 +360,7 @@ async function recompose(
   // The rows stopped first, which a failure before the generation applies puts back.
   let stopped: StoppedRow[] = []
   try {
-    const entry = bootstrapIncludes.get(ctx)
+    const entry = bootstrapIncludes.get(ctx) ?? restoreBootstrapInclude(ctx, binName)
     if (entry === undefined) throw new Error(`${binName}: profile reload requires the root Include entry`)
     // Reading the prior state imports nothing, so plugin code does not run before the next resolution publishes.
     const previousFailures = (await inactiveEntries(ctx, false)).map((failure): RecordedFailure => ({

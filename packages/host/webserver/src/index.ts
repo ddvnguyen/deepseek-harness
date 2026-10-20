@@ -101,6 +101,40 @@ export interface Config {
   compressionLevel?: number
   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
   compressionThresholdBytes?: number
+  /**
+   * dsh#02 fork opt-ins; absent or false is stock behavior.
+   * @see ForkConfig
+   */
+  fork?: ForkConfig
+}
+
+/**
+ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
+ * the stock upstream behavior, so a deployment must name it in its own config
+ * for the fork to differ from upstream.
+ */
+export interface ForkConfig {
+  /**
+   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
+   * it at load. Binding every interface is safe only behind an external
+   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
+   * sets it. @default false
+   */
+  allowWildcardHost?: boolean
+}
+
+/**
+ * The wildcard rejection is stock behavior; only the dsh#02 fork opt-in lifts
+ * it. It runs at plugin load (the constructor) because it needs `host` and
+ * `fork` together, which a per-field schema transform cannot see.
+ * @param host - the configured bind address, a concrete IPv4 or IPv6 literal.
+ * @param fork - the fork opt-ins; `allowWildcardHost: true` lifts the wildcard rejection.
+ */
+export function assertBindHost(host: string, fork?: ForkConfig): void {
+  const parsed = parseIpLiteral(host)
+  if (parsed !== undefined && isWildcardAddress(parsed) && fork?.allowWildcardHost !== true) {
+    throw new Error(`webserver: host ${JSON.stringify(host)} is an unspecified (wildcard) address, which is not supported: binding every interface would expose remote code execution to the network; bind one concrete IPv4 or IPv6 address of a local interface instead`)
+  }
 }
 
 const DEFAULT_COMPRESSION = 'none' as const
@@ -280,9 +314,6 @@ export class WebServer extends Service {
     host: z.transform(z.string(), (value) => {
       const parsed = parseIpLiteral(value)
       if (parsed === undefined) throw notLiteralError(value)
-      if (isWildcardAddress(parsed)) {
-        throw new Error(`webserver: host ${JSON.stringify(value)} is an unspecified (wildcard) address, which is not supported: binding every interface would expose remote code execution to the network; bind one concrete IPv4 or IPv6 address of a local interface instead`)
-      }
       return value
     }).required(),
     port: z.natural().max(65535).required(),
@@ -294,6 +325,10 @@ export class WebServer extends Service {
     compression: z.union([z.const('none'), z.const('gzip')]).default(DEFAULT_COMPRESSION),
     compressionLevel: z.number().step(1).min(0).max(9).default(DEFAULT_COMPRESSION_LEVEL),
     compressionThresholdBytes: z.natural().default(DEFAULT_COMPRESSION_THRESHOLD_BYTES),
+    // Omitted stays omitted, so the stock resolved config is unchanged.
+    fork: z.object({
+      allowWildcardHost: z.boolean().default(false),
+    }).default(undefined as never),
   })
 
   private readonly exact = new Map<string, WebRoute>()
@@ -317,6 +352,7 @@ export class WebServer extends Service {
 
   constructor(ctx: Context, private config: Config) {
     super(ctx, 'webServer')
+    assertBindHost(config.host, config.fork)
     const resolved = config as ResolvedConfig
     // Schemastery passes an explicit `tls: null` through; only a real object serves TLS.
     this.tlsConfig = resolved.tls ?? undefined

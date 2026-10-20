@@ -453,6 +453,11 @@ export interface ConnectionConfig {
   cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
+  /**
+   * dsh#02 fork opt-ins; absent or false is stock behavior.
+   * @see ForkConnectionConfig
+   */
+  fork?: ForkConnectionConfig
 }
 
 /** Timing for generation readiness and automatic reconnection. */
@@ -470,6 +475,22 @@ export interface ConnectionRecoveryConfig {
   generationReadyWarnMs?: number
   /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
   generationReadyTimeoutMs?: number
+}
+
+/**
+ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
+ * the stock upstream behavior.
+ */
+export interface ForkConnectionConfig {
+  /**
+   * Serve the index and admit `/api` without a launch token or browser cookie.
+   * A request is still admitted only when its Host passes the Host/Origin fence
+   * (loopback, the listener's bind address, or `trustedHosts`); an untrusted
+   * Host gets 403 and never reaches the owner Peer. For a deployment whose
+   * perimeter (for example Cloudflare Access) already authenticates every
+   * browser; PROD never sets it. @default false
+   */
+  noAuth?: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-connection -->
@@ -1679,6 +1700,11 @@ export interface Config {
   compressionLevel?: number
   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
   compressionThresholdBytes?: number
+  /**
+   * dsh#02 fork opt-ins; absent or false is stock behavior.
+   * @see ForkConfig
+   */
+  fork?: ForkConfig
 }
 
 /**
@@ -1691,6 +1717,21 @@ export interface TlsConfig {
   certFile: string
   /** Private key file for the chain's leaf certificate; unencrypted PEM. */
   keyFile: string
+}
+
+/**
+ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
+ * the stock upstream behavior, so a deployment must name it in its own config
+ * for the fork to differ from upstream.
+ */
+export interface ForkConfig {
+  /**
+   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
+   * it at load. Binding every interface is safe only behind an external
+   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
+   * sets it. @default false
+   */
+  allowWildcardHost?: boolean
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
