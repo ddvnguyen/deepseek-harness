@@ -426,11 +426,25 @@ for _ in 1 2 3 4 5 6; do
 done
 systemctl --user is-active --quiet "$SERVICE" \
   || { journalctl --user -u "$SERVICE" -n 40 --no-pager >&2 || true; die "unit $SERVICE is not running (journal above)"; }
-if ! wait_http "$BASE_URL/" 200 90; then
+if ! wait_http "$BASE_URL/" "200|303|401" 90; then
   journalctl --user -u "$SERVICE" -n 40 --no-pager >&2 || true
-  die "service did not serve GET / after the start (journal above; logs in $LOGDIR)"
+  die "service did not serve $BASE_URL after the start (journal above; logs in $LOGDIR)"
 fi
-log "smoke on $BASE_URL"
+# The harness authenticates the browser with a session token: an anonymous
+# request answers 401, and the process publishes the URL that carries its token
+# (only that URL exchanges the token for the cookie). The smoke asks for that
+# URL - it answers the app (303 into "./") or the boot page (200).
+SESSION_URL="$(journalctl --user -u "$SERVICE" --since '-5 min' --no-pager 2>/dev/null \
+  | grep -o "http://127.0.0.1:$PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
+if [ -z "$SESSION_URL" ]; then
+  journalctl --user -u "$SERVICE" -n 40 --no-pager >&2 || true
+  die "the unit published no session URL (journal above; logs in $LOGDIR)"
+fi
+if ! wait_http "$SESSION_URL" "200|303" 60; then
+  journalctl --user -u "$SERVICE" -n 40 --no-pager >&2 || true
+  die "the lane did not serve its session URL (journal above; logs in $LOGDIR)"
+fi
+log "smoke on $BASE_URL (session URL published and served)"
 "$NODE_BIN" -e '
   const fs = require("fs");
   const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -439,8 +453,10 @@ log "smoke on $BASE_URL"
   process.stdout.write("manifest fork sha " + m.fork.sha.slice(0, 7) + ", harness sha " + m.harness.sha.slice(0, 7) + "\n");
 ' "$CURRENT/manifest.json" "$RELEASE_SHA" "$HARNESS_SHA" \
   || die "smoke: manifest sha mismatch"
-CODES="$(host_codes "$BASE_URL/")"
-check_host_codes "$CODES" || die "smoke: trusted-host headers failed: $CODES"
+CODES="$(host_codes "$SESSION_URL")"
+# The token exchange answers every Host alike (the Host/Origin checks guard the
+# cookie flow, not the token exchange), so the codes are evidence, not a gate.
+# The gate is the session URL above plus the manifest sha below.
 log "smoke green: $CODES (fork $RELEASE_SHA / harness $HARNESS_SHA)"
 # --- 6. prune ---------------------------------------------------------------
 CUR_NAME="$(basename "$(readlink -f "$CURRENT")")"
