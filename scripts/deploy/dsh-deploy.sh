@@ -416,6 +416,10 @@ ln -sfn "releases/$RELEASE_SHA" "$CURRENT.new"
 mv -T "$CURRENT.new" "$CURRENT"
 SWITCHED=1
 log "restarting $SERVICE"
+# The session URL is read from the journal, and only the lines of THIS boot
+# count: the launch token changes on every process start, so a URL published by
+# an earlier boot answers 401 and would fail the smoke for the wrong reason.
+JOURNAL_CURSOR="$(journalctl --user -u "$SERVICE" -n 1 --no-pager --show-cursor 2>/dev/null | sed -n 's/^-- cursor: //p')"
 # restart falls back to start for a unit that has never been started
 # (first deploy on a unit the first-deploy approval only just installed).
 systemctl --user restart "$SERVICE" 2>/dev/null || systemctl --user start "$SERVICE" \
@@ -436,8 +440,13 @@ fi
 # URL - it answers the app (303 into "./") or the boot page (200).
 SESSION_URL=""
 for _ in $(seq 1 120); do
-  SESSION_URL="$(journalctl --user -u "$SERVICE" --since '-5 min' --no-pager 2>/dev/null \
-    | grep -o "http://127.0.0.1:$PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
+  if [ -n "$JOURNAL_CURSOR" ]; then
+    SESSION_URL="$(journalctl --user -u "$SERVICE" --after-cursor "$JOURNAL_CURSOR" --no-pager 2>/dev/null \
+      | grep -o "http://127.0.0.1:$PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
+  else
+    SESSION_URL="$(journalctl --user -u "$SERVICE" --since '-2 min' --no-pager 2>/dev/null \
+      | grep -o "http://127.0.0.1:$PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
+  fi
   [ -n "$SESSION_URL" ] && break
   sleep 0.5
 done
