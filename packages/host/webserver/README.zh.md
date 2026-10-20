@@ -16,8 +16,8 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
 - [进一步探索](#further-exploration)
+- [Fork 可选项：通配地址绑定（dsh#02)](#fork-wildcard-host)
 - [模型体验](#model-experience)
-- [Fork 可选项：通配地址绑定（dsh#02）](#fork-wildcard-host)
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
@@ -111,15 +111,6 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
 
 -----
 
-<a id="model-experience"></a>
-## 模型体验
-
-无。该 HTTP 载体只桥接浏览器与 API handler，不注册任何面向模型的内容。
-
-#### KV Cache 影响
-
-无；该包既不组装也不发送提供方请求。
-
 <a id="fork-wildcard-host"></a>
 ## Fork 可选项：通配地址绑定（dsh#02）
 
@@ -133,6 +124,15 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的�
     fork:
       allowWildcardHost: true
 ```
+
+<a id="model-experience"></a>
+## 模型体验
+
+无。该 HTTP 载体只桥接浏览器与 API handler，不注册任何面向模型的内容。
+
+#### KV Cache 影响
+
+无；该包既不组装也不发送提供方请求。
 
 ## 已知限制与延期工作
 

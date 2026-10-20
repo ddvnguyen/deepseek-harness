@@ -1938,6 +1938,11 @@
     },
     {
       "doc": "docs/subsystems/web-server.md",
+      "symbol": "ForkConfig",
+      "source": "packages/host/webserver/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/web-server.md",
       "symbol": "TlsConfig",
       "source": "packages/host/webserver/src/index.ts"
     },

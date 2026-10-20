@@ -16,8 +16,8 @@ Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http`
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further Exploration](#further-exploration)
-- [Model Experience](#model-experience)
 - [Fork opt-in: wildcard bind (dsh#02)](#fork-wildcard-host)
+- [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
@@ -111,15 +111,6 @@ Read these when the server contract is not enough: the subsystem reference, then
 
 -----
 
-<a id="model-experience"></a>
-## Model Experience
-
-None, as the HTTP carrier bridges browser and API handler and registers nothing model-facing.
-
-#### KV Cache effect
-
-None; this package neither assembles nor sends a provider request.
-
 <a id="fork-wildcard-host"></a>
 ## Fork opt-in: wildcard bind (dsh#02)
 
@@ -133,6 +124,15 @@ None; this package neither assembles nor sends a provider request.
     fork:
       allowWildcardHost: true
 ```
+
+<a id="model-experience"></a>
+## Model Experience
+
+None, as the HTTP carrier bridges browser and API handler and registers nothing model-facing.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
 

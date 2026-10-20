@@ -16,8 +16,8 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [浏览器认证与请求信任](#browser-authentication-and-request-trust)
 - [Connection generation](#connection-generation)
+- [Fork 可选项：免认证启动（dsh#02)](#fork-no-auth)
 - [模型体验](#model-experience)
-- [Fork 可选项：免认证启动（dsh#02）](#fork-no-auth)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
@@ -65,15 +65,6 @@ HTTPS cookie 名称与签名 audience 包含 `https:` scheme，因此即使 host
 可通过 Host Connection 行的 `config.recovery` 覆盖重试上限、增长因子或握手告警与取消时间；[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-client-connection)列出接受的字段。Host 校验这些值，并将其注入所提供的每个页面。Client 在提供 Connection 前校验启动数据，并在 Gateway 启动循环时采用这些默认值；显式传给 `start()` 的时序覆盖优先。增长因子必须是至少为一的有限数。若就绪、失败、取消或硬期限先于告警发生，该告警会被取消。修改 Host 恢复配置后需重新加载页面。
 
 
-<a id="model-experience"></a>
-## 模型体验
-
-无。协议消费层只在浏览器与主机之间搬运已经组合好的消息；这里没有任何内容进入模型请求。
-
-#### KV Cache 影响
-
-无；该包既不组装也不发送提供方请求。
-
 <a id="fork-no-auth"></a>
 ## Fork 可选项：免认证启动（dsh#02）
 
@@ -86,6 +77,15 @@ HTTPS cookie 名称与签名 audience 包含 `https:` scheme，因此即使 host
     fork:
       noAuth: true
 ```
+
+<a id="model-experience"></a>
+## 模型体验
+
+无。协议消费层只在浏览器与主机之间搬运已经组合好的消息；这里没有任何内容进入模型请求。
+
+#### KV Cache 影响
+
+无；该包既不组装也不发送提供方请求。
 
 ## 已知限制与暂缓事项
 

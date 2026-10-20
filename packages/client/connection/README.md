@@ -16,8 +16,8 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
 - [Use this package](#use-this-package)
 - [Browser authentication and request trust](#browser-authentication-and-request-trust)
 - [Connection generation](#connection-generation)
-- [Model Experience](#model-experience)
 - [Fork opt-in: no-auth launch (dsh#02)](#fork-no-auth)
+- [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
@@ -65,19 +65,10 @@ An ended `$events` stream, a Remote stream error, a non-ready opening item, or a
 Set the Host Connection row's `config.recovery` to override retry caps, the growth factor, or handshake warning and cancellation times; the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-client-connection) lists accepted fields. The Host validates these values and injects them into each served page. The Client validates the bootstrap data before providing Connection and uses those defaults when Gateway starts its loop; explicit `start()` timing overrides take precedence. The growth factor must be finite and at least one. Readiness, failure, cancellation, or a hard deadline that occurs before the warning cancels that warning. Reload the page after changing Host recovery configuration.
 
 
-<a id="model-experience"></a>
-## Model Experience
-
-None, as the wire consumer layer moves already-composed messages between browser and host; nothing here reaches a model request.
-
-#### KV Cache effect
-
-None; this package neither assembles nor sends a provider request.
-
 <a id="fork-no-auth"></a>
 ## Fork opt-in: no-auth launch (dsh#02)
 
-`fork.noAuth` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`. Set on the `connection` row, it makes `GET /` serve `index.html` and `/api` admit the owner browser Peer without a launch token or browser cookie, and it ignores any `?token=` on the index URL. **This removes cookie authentication.** It is meant for a deployment whose perimeter (for example Cloudflare Access) already authenticates every browser. The Host/Origin fence stays the gate: a request is admitted only when its `Host` is loopback, the listener's bind IP, or a `trustedHosts` entry, and an untrusted `Host` (or a cross-site `Origin`) is still refused with 403 and never reaches the Peer. PROD does not set it. Because a patch replaces the row's whole `config`, restate the invocation authorities:
+`fork.noAuth` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`. Set on the `connection` row, it makes `GET /` serve `index.html` and `/api` admit the owner browser Peer without a launch token or browser cookie, and it ignores any `?token=` on the index URL. **This removes cookie authentication.** It is meant for a deployment whose perimeter (for example Cloudflare Access) already authenticates every browser. The Host/Origin fence stays the gate: a request is admitted only when its `Host` is loopback, the listener's bind IP, or a `trustedHosts` entry, and an untrusted `Host` (or a cross-site `Origin`) is still refused with 403 and never reaches the Peer. PROD does not set it. Because the patch replaces the whole row's `config`, the trusted hosts in effect must be written out again:
 
 ```yaml
 - id: connection
@@ -86,6 +77,15 @@ None; this package neither assembles nor sends a provider request.
     fork:
       noAuth: true
 ```
+
+<a id="model-experience"></a>
+## Model Experience
+
+None, as the wire consumer layer moves already-composed messages between browser and host; nothing here reaches a model request.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends a provider request.
 
 ## Known Limitations and Deferred Work
 

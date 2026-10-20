@@ -12,8 +12,8 @@
   en: a83b5e9fd1968062
   zh: ac68628e185a4bff
 /deepseek-ai-dsh-client-connection/table-of-contents:
-  en: f6bccb54d468c1e9
-  zh: 73070e47a7d59d29
+  en: 56f44c2e3ff223a0
+  zh: 08913e97ca2708eb
 /deepseek-ai-dsh-client-connection/use-this-package:
   en: da6810858bf74a86
   zh: d623e510ec74520f
@@ -21,17 +21,17 @@
   en: e2154aa9caa859b4
   zh: 32832efe4dc37c06
 /deepseek-ai-dsh-client-connection/connection-generation:
-  en: d9fe48c025ace7ce
-  zh: 0e23b299fbf25ae6
+  en: caaa72b98b9d93ae
+  zh: a20ad439598483c2
+/deepseek-ai-dsh-client-connection/fork-opt-in-no-auth-launch-dsh-02:
+  en: cd402ed667e32263
+  zh: a5f7427f1b978e08
 /deepseek-ai-dsh-client-connection/model-experience:
   en: 88bbc33fe9ae9df8
   zh: bfbab6d51b4abd40
 /deepseek-ai-dsh-client-connection/model-experience/kv-cache-effect:
-  en: 9b6d35ab97d98c74
-  zh: ac8a1a4b438798dc
-/deepseek-ai-dsh-client-connection/fork-opt-in-no-auth-launch-dsh-02:
-  en: 6162110b0a5c7260
-  zh: cf201bcd45a48a10
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
 /deepseek-ai-dsh-client-connection/known-limitations-and-deferred-work:
   en: a860aa95302e4f02
   zh: 4df79a08b5fe018e

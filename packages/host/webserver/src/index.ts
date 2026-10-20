@@ -127,6 +127,8 @@ export interface ForkConfig {
  * The wildcard rejection is stock behavior; only the dsh#02 fork opt-in lifts
  * it. It runs at plugin load (the constructor) because it needs `host` and
  * `fork` together, which a per-field schema transform cannot see.
+ * @param host - the configured bind address, a concrete IPv4 or IPv6 literal.
+ * @param fork - the fork opt-ins; `allowWildcardHost: true` lifts the wildcard rejection.
  */
 export function assertBindHost(host: string, fork?: ForkConfig): void {
   const parsed = parseIpLiteral(host)

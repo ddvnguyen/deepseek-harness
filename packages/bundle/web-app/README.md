@@ -20,8 +20,8 @@ Run `dsh --profile web` for browser chat, model and settings management, and ses
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
 - [Further Exploration](#further-exploration)
-- [Model Experience](#model-experience)
 - [Fork opt-in: wildcard bind (dsh#02)](#fork-wildcard-host)
+- [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
@@ -144,6 +144,18 @@ Read these pages when you want to go deeper into the shared core, the browser re
 
 -----
 
+<a id="fork-wildcard-host"></a>
+## Fork opt-in: wildcard bind (dsh#02)
+
+`fork.allowWildcardHost` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`: `--host 0.0.0.0` (or `::`) is refused. Set it on the `web-startup` row to let the CLI accept an unspecified `--host`; the bundle passes it on to the `webserver` row, which then binds it. Binding every interface is safe only behind an external perimeter and the `connection` row's `trustedHosts` Host fence, which this option leaves untouched, so list every authority browsers use with `--trusted-host`. PROD does not set it.
+
+```yaml
+- id: web-startup
+  config:
+    fork:
+      allowWildcardHost: true
+```
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -160,18 +172,6 @@ Two managed-environment variable lines; constant per process.
 #### KV Cache effect
 
 None; the plugin contributes no system-prompt text.
-
-<a id="fork-wildcard-host"></a>
-## Fork opt-in: wildcard bind (dsh#02)
-
-`fork.allowWildcardHost` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`: `--host 0.0.0.0` (or `::`) is refused. Set it on the `web-startup` row to let the CLI accept an unspecified `--host`; the bundle passes it on to the `webserver` row, which then binds it. Binding every interface is safe only behind an external perimeter and the `connection` row's `trustedHosts` Host fence, which this option leaves untouched, so list every authority browsers use with `--trusted-host`. PROD does not set it.
-
-```yaml
-- id: web-startup
-  config:
-    fork:
-      allowWildcardHost: true
-```
 
 ## Known Limitations and Deferred Work
 
