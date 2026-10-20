@@ -16,6 +16,7 @@ kind: "package-reference"
 - [使用本包](#use-this-package)
 - [浏览器认证与请求信任](#browser-authentication-and-request-trust)
 - [Connection generation](#connection-generation)
+- [Fork 可选项：免认证启动（dsh#02)](#fork-no-auth)
 - [模型体验](#model-experience)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
@@ -63,6 +64,19 @@ HTTPS cookie 名称与签名 audience 包含 `https:` scheme，因此即使 host
 
 可通过 Host Connection 行的 `config.recovery` 覆盖重试上限、增长因子或握手告警与取消时间；[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-client-connection)列出接受的字段。Host 校验这些值，并将其注入所提供的每个页面。Client 在提供 Connection 前校验启动数据，并在 Gateway 启动循环时采用这些默认值；显式传给 `start()` 的时序覆盖优先。增长因子必须是至少为一的有限数。若就绪、失败、取消或硬期限先于告警发生，该告警会被取消。修改 Host 恢复配置后需重新加载页面。
 
+
+<a id="fork-no-auth"></a>
+## Fork 可选项：免认证启动（dsh#02）
+
+`fork.noAuth` 是仅由 dsh#02 fork 补丁系列新增的开关；缺省或为 `false` 时保持上游行为不变。在 `connection` 行上设置后，`GET /` 直接提供 `index.html`，`/api` 无需启动令牌或浏览器 Cookie 即可接纳所有者浏览器 Peer，并忽略索引 URL 上的 `?token=`。**这会移除 Cookie 认证**，仅适用于外部边界（例如 Cloudflare Access）已经对每个浏览器完成认证的部署。Host/Origin 围栏仍是准入关口：只有 `Host` 为回环地址、监听器绑定 IP 或 `trustedHosts` 条目的请求才会被接纳，不受信任的 `Host`（或跨站 `Origin`）依旧返回 403，永远到不了 Peer。PROD 不设置该选项。由于补丁会替换整行的 `config`，需要重新写出调用时的信任主机：
+
+```yaml
+- id: connection
+  config:
+    trustedHosts: !!js ctx.webStartup.trustedHosts
+    fork:
+      noAuth: true
+```
 
 <a id="model-experience"></a>
 ## 模型体验

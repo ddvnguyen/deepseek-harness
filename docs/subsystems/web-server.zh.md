@@ -60,6 +60,28 @@ interface Config {
   compressionLevel?: number
   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
   compressionThresholdBytes?: number
+  /**
+   * dsh#02 fork opt-ins; absent or false is stock behavior.
+   * @see ForkConfig
+   */
+  fork?: ForkConfig
+}
+```
+
+```ts type-equiv
+/**
+ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
+ * the stock upstream behavior, so a deployment must name it in its own config
+ * for the fork to differ from upstream.
+ */
+interface ForkConfig {
+  /**
+   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
+   * it at load. Binding every interface is safe only behind an external
+   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
+   * sets it. @default false
+   */
+  allowWildcardHost?: boolean
 }
 ```
 

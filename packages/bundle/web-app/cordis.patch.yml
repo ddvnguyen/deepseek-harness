@@ -175,7 +175,8 @@
     # by the web-runtime row below through the fallback seat. Routing and
     # browser-facing asset paths do not depend on the advertised URL, which the
     # web-runtime row owns; Connection reads trust authorities from webStartup.
-    # This row rejects wildcard binds.
+    # This row rejects wildcard binds unless the web-startup row sets
+    # fork.allowWildcardHost (dsh#02 fork patch).
     - id: webserver
       name: '@deepseek-ai/dsh-host-webserver'
       inject: [webStartup]
@@ -183,6 +184,10 @@
         host: !!js ctx.webStartup.host ?? '127.0.0.1'
         port: !!js ctx.webStartup.port ?? 3080
         tls: !!js ctx.webStartup.tls
+        # dsh#02: lifts the wildcard rejection only when the web-startup row
+        # opted in (fork.allowWildcardHost); stock leaves it off.
+        fork:
+          allowWildcardHost: !!js ctx.webStartup.allowWildcardHost === true
         compression: gzip
         compressionLevel: 1
         compressionThresholdBytes: 1024

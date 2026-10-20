@@ -276,6 +276,13 @@ check_host_codes() { # $1 = the host_codes line, $2 = accepted trusted code(s) (
 
 # --- 0. preflight -----------------------------------------------------------
 [ -f "$UNIT_FILE" ] || die "unit file missing: $UNIT_FILE (create it first)"
+# The listen address lives only in the unit. A unit that drifted back to
+# 127.0.0.1 deploys "successfully" and is then unreachable from the LAN, which
+# is exactly how dsh-x looked healthy on localhost while the public hostname
+# refused every request. The lane is meant to be reachable from the internet
+# (behind the perimeter), so the wildcard bind is the contract.
+grep -q -- '--host 0\.0\.0\.0' "$UNIT_FILE" \
+  || die "unit $UNIT_FILE does not bind 0.0.0.0; add --host 0.0.0.0 to ExecStart"
 [ -f "$REPO_ROOT/apps/cli/lib/bin.js" ] || die "no built apps/cli/lib/bin.js in $REPO_ROOT — run the build step first"
 [ -d "$HARNESS_ROOT/.git" ] || die "harness checkout missing: $HARNESS_ROOT"
 case "$PORT" in 3080|3081|8099|8110|18081|18789|4097|8210) die "refusing to use protected port $PORT";;

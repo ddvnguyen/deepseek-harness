@@ -9,6 +9,7 @@
 
 import { Command } from 'commander'
 import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { parseCmdline } from '@deepseek-ai/dsh-cmdline'
 import { isWildcardHost, type TlsConfig } from '@deepseek-ai/dsh-host-webserver'
 import { parsePublicUrl } from './public-url.ts'
@@ -18,6 +19,30 @@ export const name = 'web-startup'
 
 /** Services required before the flags can be resolved. */
 export const inject = ['cmdlineArgs']
+
+/**
+ * Switches that only the dsh#02 fork patch series adds; absent or false is
+ * stock upstream behavior.
+ */
+export interface ForkStartupConfig {
+  /**
+   * Accept `--host 0.0.0.0` (or another unspecified address) instead of
+   * refusing it. Only for a deployment behind an external perimeter and a
+   * `--trusted-host` list; PROD never sets it. @default false
+   */
+  allowWildcardHost?: boolean
+}
+
+/** Optional row config of the `web-startup` row. */
+export interface StartupConfig {
+  fork?: ForkStartupConfig
+}
+
+export const Config: z<StartupConfig> = z.object({
+  fork: z.object({
+    allowWildcardHost: z.boolean().default(false),
+  }).default({}),
+})
 
 /** Service provided by this ordinary plugin and injected by flag-configured rows. */
 export const WEB_STARTUP_SERVICE = 'webStartup'
@@ -39,6 +64,8 @@ export interface WebStartupValues {
   trustedHosts: string[]
   /** Server certificate chain and unencrypted private key supplied together. */
   tls?: TlsConfig
+  /** dsh#02 fork opt-in; present only when the row config enabled it. */
+  allowWildcardHost?: true
 }
 
 /** The web flag family, as commander parsed it. */
@@ -88,11 +115,12 @@ Examples:
  * and `--help` provide no service.
  * @param ctx - plugin context carrying the command line.
  */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config?: StartupConfig): void {
+  const allowWildcardHost = config?.fork?.allowWildcardHost === true
   const program = webCommand()
   program.action(() => {
     const options = program.opts<WebOptions>()
-    if (options.host !== undefined && isWildcardHost(options.host)) {
+    if (options.host !== undefined && isWildcardHost(options.host) && !allowWildcardHost) {
       program.error(`error: --host ${options.host} is an unspecified (wildcard) address, which is not supported: binding every interface would expose remote code execution to the network; bind one concrete IPv4 or IPv6 address instead`)
     }
     if (options.port !== undefined && !/^\d+$/.test(options.port)) {
@@ -117,6 +145,7 @@ export function apply(ctx: Context): void {
       ...options.port !== undefined && { port: Number(options.port) },
       ...options.publicUrl !== undefined && { publicUrl: options.publicUrl },
       ...tls !== undefined && { tls },
+      ...allowWildcardHost && { allowWildcardHost: true as const },
       trustedHosts: options.trustedHost ?? [],
     } satisfies WebStartupValues)
   })

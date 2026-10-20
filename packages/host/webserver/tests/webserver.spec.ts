@@ -21,7 +21,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import HttpServer, { bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
+import HttpServer, { assertBindHost, bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
 import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
 
 /** One-shot barrier for disposal overlapping a pending PEM read. */
@@ -241,7 +241,7 @@ describe('real Loader composition', () => {
       '::ffff:0.0.0.0', '::ffff:0:0', '::ffff:0000:0000', '0:0:0:0:0:ffff:0:0',
       '0:0:0:0:0:ffff:0.0.0.0', '::ffff:0.0.0.0%eth0',
     ]) {
-      expect(() => HttpServer.Config({ host, port: 0 })).toThrow(
+      expect(() => assertBindHost(host)).toThrow(
         /is an unspecified \(wildcard\) address, which is not supported/,
       )
     }
@@ -249,6 +249,22 @@ describe('real Loader composition', () => {
       expect(() => HttpServer.Config({ host, port: 0 }))
         .toThrow(/is not a concrete IPv4 or IPv6 address literal/)
     }
+  })
+
+  // dsh#02 fork opt-in: the stock rejection above is the default, and only an
+  // explicit `fork.allowWildcardHost` lifts it, for every spelling.
+  it('accepts a wildcard bind only under the fork.allowWildcardHost opt-in', () => {
+    for (const host of ['0.0.0.0', '::', '::ffff:0.0.0.0']) {
+      expect(HttpServer.Config({ host, port: 0, fork: { allowWildcardHost: true } }).host).toBe(host)
+      expect(() => assertBindHost(host, { allowWildcardHost: true })).not.toThrow()
+      expect(() => assertBindHost(host, { allowWildcardHost: false }))
+        .toThrow(/is an unspecified \(wildcard\) address, which is not supported/)
+      expect(() => assertBindHost(host, undefined))
+        .toThrow(/is an unspecified \(wildcard\) address, which is not supported/)
+    }
+    // The opt-in lifts only the wildcard rule, never the literal rule.
+    expect(() => HttpServer.Config({ host: 'localhost', port: 0, fork: { allowWildcardHost: true } }))
+      .toThrow(/is not a concrete IPv4 or IPv6 address literal/)
   })
 
   it('denies the IPv4-mapped wildcard through the real plugin load, not only the predicate', async () => {

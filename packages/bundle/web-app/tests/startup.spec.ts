@@ -38,7 +38,7 @@ afterEach(async () => {
  * @param args - the invocation's inner arguments.
  * @returns the service value and observed consumer/process effects.
  */
-async function bootProvider(args: string[]): Promise<{
+async function bootProvider(args: string[], providerConfig?: string[]): Promise<{
   values: WebStartupValues | undefined
   observed: Observed
 }> {
@@ -53,7 +53,7 @@ export function apply(_ctx, config) { globalThis.__webStartupObserved.readerConf
   writeFileSync(join(dir, 'provider.mjs'), `
 export const name = 'web-startup'
 export const inject = ['cmdlineArgs']
-export const apply = ctx => globalThis.__webStartupApply(ctx)
+export const apply = (ctx, config) => globalThis.__webStartupApply(ctx, config)
 `)
   writeFileSync(join(dir, 'cordis.yml'), [
     '- id: reader',
@@ -68,6 +68,7 @@ export const apply = ctx => globalThis.__webStartupApply(ctx)
     '    tls: !!js ctx.webStartup.tls',
     '- id: provider',
     `  name: ${pathToFileURL(join(dir, 'provider.mjs')).href}`,
+    ...providerConfig === undefined ? [] : ['  config:', ...providerConfig],
     '',
   ].join('\n'))
   const observing = { write: (chunk: string) => { observed.out += chunk; return true } }
@@ -122,6 +123,30 @@ describe('web command-line provider', () => {
     expect(observed.out).toContain(`error: --host ${host} is an unspecified (wildcard) address`)
     expect(values).toBeUndefined()
     expect(observed.readerConfig).toBeUndefined()
+    expect(observed.exits).toEqual([1])
+  })
+
+  // dsh#02 fork opt-in: stock refusal above is the default; only the row's
+  // fork.allowWildcardHost lets the CLI hand a wildcard host to the webserver.
+  it('accepts wildcard --host only under the web-startup fork.allowWildcardHost opt-in', async () => {
+    const { values, observed } = await bootProvider(
+      ['--host', '0.0.0.0', '--trusted-host', '192.168.7.99'],
+      ['    fork:', '      allowWildcardHost: true'],
+    )
+    expect(observed.out).not.toContain('wildcard')
+    expect(values).toEqual({
+      host: '0.0.0.0', openBrowser: true, allowWildcardHost: true, trustedHosts: ['192.168.7.99'],
+    })
+    expect(observed.exits).toEqual([])
+  })
+
+  it('keeps refusing wildcard --host when the fork opt-in is explicitly false', async () => {
+    const { values, observed } = await bootProvider(
+      ['--host', '0.0.0.0'],
+      ['    fork:', '      allowWildcardHost: false'],
+    )
+    expect(observed.out).toContain('error: --host 0.0.0.0 is an unspecified (wildcard) address')
+    expect(values).toBeUndefined()
     expect(observed.exits).toEqual([1])
   })
 
