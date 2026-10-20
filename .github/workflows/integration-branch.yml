@@ -1,0 +1,60 @@
+# Keeps the `integration` branch alive for this repo.
+#
+# The released branch of the fork is `master`; `integration` is the working
+# branch every feature lands on, and it is created from the released branch the
+# first time it is missing. The branch is never reset and never force-pushed:
+# once it exists it only moves forward, and it is fast-forwarded to `master`
+# when `master` moved ahead of it and `integration` carries no unique commits.
+#
+# Mirrors the moct repo's integration-branch workflow (same behaviour, the
+# released branch there is `main`).
+name: integration-branch
+
+"on":
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: integration-branch-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  ensure-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the released branch
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Create integration from the released branch when it is missing
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin integration || true
+          if git rev-parse --verify --quiet refs/remotes/origin/integration >/dev/null; then
+            echo "integration already exists at $(git rev-parse refs/remotes/origin/integration)"
+          else
+            git push origin HEAD:refs/heads/integration
+            echo "created integration from the released branch head $(git rev-parse HEAD)"
+          fi
+
+      - name: Fast-forward integration when master moved ahead of it
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin master integration
+          if ! git merge-base --is-ancestor refs/remotes/origin/integration refs/remotes/origin/master; then
+            echo "integration carries commits that master does not; leaving it untouched"
+            exit 0
+          fi
+          if [ "$(git rev-parse refs/remotes/origin/integration)" = "$(git rev-parse refs/remotes/origin/master)" ]; then
+            echo "integration is already up to date with master"
+            exit 0
+          fi
+          git push origin refs/remotes/origin/master:refs/heads/integration
+          echo "fast-forwarded integration to the released branch head"

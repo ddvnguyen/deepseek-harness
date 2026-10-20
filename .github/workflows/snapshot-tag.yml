@@ -1,0 +1,59 @@
+# Cuts the daily snapshot tag of the working branch.
+#
+# Tag name: `snapshot/<ddMMyy>` (for example `snapshot/20Oct26`), ANNOTATED,
+# cut on the head of the working branch (`integration`). Tags are never deleted
+# and never moved: a tag that already exists is left exactly as it is and the
+# run reports the skip.
+#
+# Mirrors the moct repo's snapshot-tag workflow (same tag name, same rule).
+name: snapshot-tag
+
+"on":
+  schedule:
+    # 18:17 UTC every day, off the hour so the run does not pile up on the
+    # other scheduled jobs of the train.
+    - cron: '17 18 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'snapshot date as ddMMyy (for example 20Oct26); empty means today (UTC)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snapshot-tag-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the working branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration
+          fetch-depth: 0
+
+      - name: Cut the annotated snapshot tag
+        env:
+          SNAPSHOT_DATE: ${{ inputs.date }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SNAPSHOT_DATE:-}" ]; then
+            TAG="snapshot/$SNAPSHOT_DATE"
+          else
+            TAG="snapshot/$(date -u +%d%b%y)"
+          fi
+          SHA="$(git rev-parse HEAD)"
+          echo "cutting $TAG on $SHA"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG already exists ($(git rev-parse "refs/tags/$TAG")); tags are never deleted or moved — skipping"
+            exit 0
+          fi
+          git tag -a "$TAG" -m "Daily snapshot $TAG of the integration head $SHA" "$SHA"
+          git push origin "refs/tags/$TAG"
+          echo "pushed $TAG"

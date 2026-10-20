@@ -1,0 +1,80 @@
+# Keeps the stack PR of the train in sync: `integration` -> `master`
+# (the released branch of this repo).
+#
+# Rules:
+#   - Skip rule: when `integration` carries no commit that `master` does not
+#     have, no PR is created; the run logs the skip and ends green.
+#   - Never a second PR for the same head/base: when a PR for
+#     `integration` -> `master` already exists, that PR is refreshed (title and
+#     body carry the current head sha) instead of opening a new one.
+#   - The guard: the PR base is always the released branch, and the head is
+#     always the working branch. Nothing else is ever pushed to.
+#
+# Mirrors the moct repo's stack-pr workflow (same behaviour, the released
+# branch there is `main`).
+name: stack-pr
+
+"on":
+  push:
+    branches: [integration]
+  schedule:
+    - cron: '41 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: stack-pr-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  refresh-stack-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout the working branch
+        uses: actions/checkout@v4
+        with:
+          ref: integration
+          fetch-depth: 0
+
+      - name: Refresh the integration -> master stack PR
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin master integration
+          HEAD_SHA="$(git rev-parse refs/remotes/origin/integration)"
+          BASE_SHA="$(git rev-parse refs/remotes/origin/master)"
+          if git merge-base --is-ancestor "$HEAD_SHA" "$BASE_SHA"; then
+            echo "no new commit on integration relative to master ($HEAD_SHA) — no stack PR is opened"
+            exit 0
+          fi
+          COUNT="$(git rev-list --count "$BASE_SHA".."$HEAD_SHA")"
+          echo "integration is $COUNT commit(s) ahead of master ($HEAD_SHA)"
+          TITLE="integration -> master"
+          BODY="$(printf '%s\n' \
+            "Stack PR of the release train for \`ddvnguyen/deepseek-harness\`." \
+            "" \
+            "- head: \`integration\` at $HEAD_SHA" \
+            "- base: \`master\` at $BASE_SHA" \
+            "- commits ahead of the released branch: $COUNT" \
+            "" \
+            "Refreshed by .github/workflows/stack-pr.yml — the body carries the current head sha.")"
+          PR_NUMBER="$(gh pr list --base master --head integration --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$PR_NUMBER" ]; then
+            echo "stack PR #$PR_NUMBER already exists for integration -> master; refreshing it"
+            gh pr edit "$PR_NUMBER" --title "$TITLE" --body "$BODY"
+            exit 0
+          fi
+          CLOSED_PR="$(gh pr list --base master --head integration --state closed --json number --jq '.[0].number // empty')"
+          if [ -n "$CLOSED_PR" ]; then
+            echo "stack PR #$CLOSED_PR was closed; reopening it instead of opening a second one"
+            gh pr reopen "$CLOSED_PR" || true
+            gh pr edit "$CLOSED_PR" --title "$TITLE" --body "$BODY" || true
+            exit 0
+          fi
+          echo "opening the stack PR integration -> master"
+          gh pr create --base master --head integration --title "$TITLE" --body "$BODY"
