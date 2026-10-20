@@ -465,6 +465,14 @@ if ! wait_http "$SESSION_URL" "200|303" 60; then
   die "the lane did not serve its session URL (journal above; logs in $LOGDIR)"
 fi
 log "smoke on $BASE_URL (session URL published and served)"
+# The harness authenticates the browser with a session token, and the launch
+# token changes on every process start: a browser that has no cookie yet has to
+# open the URL the process published. Publish it next to the lane's state so
+# the operator can read it without digging through the journal.
+SESSION_FILE="$CLOUDS_ROOT/$SERVICE/data/session-url.txt"
+printf '%s\n' "$SESSION_URL" > "$SESSION_FILE"
+chmod 600 "$SESSION_FILE"
+log "session URL for the browser: $SESSION_URL (also in $SESSION_FILE)"
 "$NODE_BIN" -e '
   const fs = require("fs");
   const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
