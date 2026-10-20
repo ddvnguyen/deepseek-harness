@@ -434,8 +434,13 @@ fi
 # request answers 401, and the process publishes the URL that carries its token
 # (only that URL exchanges the token for the cookie). The smoke asks for that
 # URL - it answers the app (303 into "./") or the boot page (200).
-SESSION_URL="$(journalctl --user -u "$SERVICE" --since '-5 min' --no-pager 2>/dev/null \
-  | grep -o "http://127.0.0.1:$PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
+SESSION_URL=""
+for _ in $(seq 1 120); do
+  SESSION_URL="$(journalctl --user -u "$SERVICE" --since '-5 min' --no-pager 2>/dev/null \
+    | grep -o "http://127.0.0.1:$PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
+  [ -n "$SESSION_URL" ] && break
+  sleep 0.5
+done
 if [ -z "$SESSION_URL" ]; then
   journalctl --user -u "$SERVICE" -n 40 --no-pager >&2 || true
   die "the unit published no session URL (journal above; logs in $LOGDIR)"
