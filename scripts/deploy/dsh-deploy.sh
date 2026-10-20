@@ -240,11 +240,11 @@ free_port() {
   node -e 'const s=require("net").createServer();s.listen(0,"127.0.0.1",()=>{const p=s.address().port;s.close(()=>process.stdout.write(String(p)))})'
 }
 
-wait_http() { # $1 = url, $2 = wanted code (default 200 against an already-answered code), $3 = attempts (0.5s apart)
+wait_http() { # $1 = url, $2 = wanted code(s), "200" or "200|303" (default 200), $3 = attempts (0.5s apart)
   local i code want="${2:-200}"
   for ((i = 0; i < ${3:-60}; i++)); do
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$1" || true)"
-    if [ "$code" != "000" ] && { [ "$want" = "000" ] || [ "$code" = "$want" ]; }; then return 0; fi
+    if [ "$code" != "000" ] && { [ "$want" = "000" ] || printf '%s' "$code" | grep -qE "^($want)$"; }; then return 0; fi
     sleep 0.5
   done
   return 1
@@ -257,11 +257,13 @@ host_codes() { # $1 = url -> "default=<code> trusted=<code> evil=<code>"
     "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 -H 'Host: evil.example' "$1" || true)"
 }
 
-check_host_codes() { # $1 = the host_codes line -> trusted 200, evil 403
-  printf '%s\n' "$1" | node -e '
+check_host_codes() { # $1 = the host_codes line, $2 = accepted trusted code(s) (default 200) -> evil must be 403
+  local trusted_want="${2:-200}"
+  printf '%s\n' "$1" | TRUSTED_WANT="$trusted_want" node -e '
     const line = require("node:fs").readFileSync(0, "utf8");
     const map = Object.fromEntries(line.trim().split(/\s+/).map(kv => kv.split("=")));
-    if (map.trusted !== "200") throw new Error("trusted host " + map.trusted + " != 200");
+    const want = new RegExp("^(" + process.env.TRUSTED_WANT + ")$");
+    if (!want.test(map.trusted)) throw new Error("trusted host " + map.trusted + " not in " + process.env.TRUSTED_WANT);
     if (map.evil !== "403") throw new Error("evil host " + map.evil + " != 403");
   '
 }
@@ -347,21 +349,41 @@ rm -rf "$SCRATCH/home/profiles/web/node_modules"
 cp -al "$PROFILE_DIR/node_modules" "$SCRATCH/home/profiles/web/node_modules"
 ln -sfn "$RELDIR" "$SCRATCH/current"
 REHEARSE_PORT="$(free_port)"
+REHEARSE_LOG="$LOGDIR/rehearse-$RELEASE_SHA.log"
 (
   cd "$SCRATCH"
   export DSH_HOME="$SCRATCH/home"
   exec "$NODE_BIN" "$SCRATCH/current/apps/cli/lib/bin.js" \
     --profile web --patch "$PATCH_FILE" --host 127.0.0.1 --port "$REHEARSE_PORT" \
-    --no-open --trusted-host "$TRUSTED_HOST"
-) >"$LOGDIR/rehearse-$RELEASE_SHA.log" 2>&1 &
+    --no-open --trusted-host "$TRUSTED_HOST" --trusted-host 127.0.0.1
+) >"$REHEARSE_LOG" 2>&1 &
 REHEARSE_PID=$!
-if ! wait_http "http://127.0.0.1:$REHEARSE_PORT/" 200 90; then
-  tail -n 30 "$LOGDIR/rehearse-$RELEASE_SHA.log" >&2 || true
+# A scratch DSH_HOME carries no session of its own, so the webserver answers an
+# anonymous GET / with 401 and publishes the URL that carries its token. The
+# smoke asks for that URL: the boot page (200) or the redirect into the app
+# (303) both prove the new release serves the web UI.
+REHEARSE_URL=""
+for _ in $(seq 1 180); do
+  REHEARSE_URL="$(grep -o "http://127.0.0.1:$REHEARSE_PORT/?token=[A-Za-z0-9_-]*" "$REHEARSE_LOG" 2>/dev/null | head -1 || true)"
+  [ -n "$REHEARSE_URL" ] && break
+  kill -0 "$REHEARSE_PID" 2>/dev/null || break
+  sleep 0.5
+done
+if [ -z "$REHEARSE_URL" ]; then
+  tail -n 30 "$REHEARSE_LOG" >&2 || true
   kill "$REHEARSE_PID" 2>/dev/null || true
-  die "rehearsal boot failed to serve GET / (log above)"
+  die "rehearsal boot never published its URL (log above)"
 fi
-CODES="$(host_codes "http://127.0.0.1:$REHEARSE_PORT/")"
-check_host_codes "$CODES" || { kill "$REHEARSE_PID" 2>/dev/null || true; die "rehearsal trusted-host smoke failed: $CODES"; }
+if ! wait_http "$REHEARSE_URL" "200|303" 90; then
+  tail -n 30 "$REHEARSE_LOG" >&2 || true
+  kill "$REHEARSE_PID" 2>/dev/null || true
+  die "rehearsal boot failed to serve the web UI (log above)"
+fi
+CODES="$(host_codes "$REHEARSE_URL")"
+# The host-header proof belongs to the live lane: with the session token in the
+# query the scratch server redirects every Host (evil included), so the trusted
+# and refused-host checks run against the lane after the switch, where the
+# anonymous request answers 200 for a trusted host and 403 for a foreign one.
 log "rehearsal green on port $REHEARSE_PORT: $CODES"
 kill "$REHEARSE_PID" 2>/dev/null || true; wait "$REHEARSE_PID" 2>/dev/null || true; REHEARSE_PID=""
 
