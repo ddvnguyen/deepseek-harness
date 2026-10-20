@@ -324,7 +324,7 @@ else
       harness: { sha: harnessSha },
       packagedAt: new Date().toISOString(),
     }, null, 2) + "\n");
-  ' "$RELEASE_SHA" "$HARNESS_SHA" "ddvnguyen/moct-dsh-team-room" "$RELDIR/manifest.json" \
+  ' "$RELEASE_SHA" "$HARNESS_SHA" "ddvnguyen/deepseek-harness" "$RELDIR/manifest.json" \
     || die "manifest write failed"
   grep -q "$RELEASE_SHA" "$RELDIR/manifest.json" || die "manifest missing the fork sha"
   grep -q "$HARNESS_SHA" "$RELDIR/manifest.json" || die "manifest missing the harness sha"
