@@ -421,6 +421,27 @@ describe('RightbarSeat presentation', () => {
     expect(h.layout()).toBe(retained)
   })
 
+  it('renders beside a hosted main panel and hides again when the claim is released', async () => {
+    const h = await mountSeat()
+    h.open('hosted.txt')
+    const retained = h.layout()
+    const release = h.controller.hostPanel('other-panel')
+    act(() => { h.runtime.panelInfo.set({ activePanelId: 'other-panel' as MainPanelId }) })
+    expect(element(h.view.container, '[data-sidebar-right-session]').hidden).toBe(false)
+    expect(h.controller.mounted.getSnapshot()).toBe(SESSION)
+    // The column still works beside the panel: an open lands in the Session's surface.
+    act(() => { h.controller.openTab('text', { revealIfOpened: false }) })
+    expect(h.layout()).not.toBe(retained)
+    // Releasing the last claim hides it, exactly as a panel nobody hosted does.
+    act(() => { release() })
+    expect(element(h.view.container, '[data-sidebar-right-session]').hidden).toBe(true)
+    expect(h.controller.mounted.getSnapshot()).toBeUndefined()
+    expect(h.frame.closeRightbar).toHaveBeenCalled()
+    act(() => { h.runtime.panelInfo.set({ activePanelId: null }) })
+    expect(element(h.view.container, '[data-sidebar-right-session]').hidden).toBe(false)
+    expect(h.controller.mounted.getSnapshot()).toBe(SESSION)
+  })
+
   it('names the on-screen Session before a Conversation opener acts in the commit that returns from a global panel', async () => {
     const h = await mountSeat(1440, true, 0, true)
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})

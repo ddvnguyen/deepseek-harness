@@ -130,20 +130,28 @@ export function apply(ctx: ClientContext): void {
     },
   )
   // The Session on screen: the selected one while the Conversation fills the
-  // main column. Both sources notify before React renders their change, so the
-  // service names the arriving Session before any component of that commit
-  // reads it, and its seat mints the Session's store in the same render.
+  // main column, or while a global panel that hosts the column fills it. Both
+  // sources notify before React renders their change, so the service names the
+  // arriving Session before any component of that commit reads it, and its seat
+  // mints the Session's store in the same render. The hosted set is the same
+  // one the root seat's visibility reads, so a host, a release and a panel
+  // switch all settle in one commit.
   ctx.effect(() => {
     const sync = (): void => {
       const selected = views.source.getSnapshot().find(view => view.selected)
-      show(layout.panelInfo.getSnapshot().activePanelId === null ? selected?.sessionId : undefined)
+      const activePanelId = layout.panelInfo.getSnapshot().activePanelId
+      show(activePanelId === null || controller.hostedPanels.getSnapshot().has(activePanelId)
+        ? selected?.sessionId
+        : undefined)
     }
     const unsubscribeViews = views.source.subscribe(sync)
     const unsubscribePanel = layout.panelInfo.subscribe(sync)
+    const unsubscribeHosted = controller.hostedPanels.subscribe(sync)
     sync()
     return () => {
       unsubscribeViews()
       unsubscribePanel()
+      unsubscribeHosted()
       show(undefined)
     }
   }, 'ui-sidebar-right: on-screen Session')
@@ -206,7 +214,7 @@ export function apply(ctx: ClientContext): void {
         name: 'rightbar',
         children: { 'rightbar.session': { kind: 'single', scope: 'session' } },
         inject: (): RightbarRootInjected => ({
-          hooks: { views: views.source },
+          hooks: { views: views.source, hostedPanels: controller.hostedPanels },
           mountView: reference => views.mount(reference),
         }),
       }, RightbarRoot)
