@@ -160,6 +160,56 @@ describe('ui-sidebar-right apply', () => {
     expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
   })
 
+  it('hosts a main panel so the column stays beside it until the last claim is released', async () => {
+    const { ctx, layout, current } = await boot()
+    current.set({ key: SESSION })
+    layout.panelInfo.set({ activePanelId: 'mmx' })
+    // A panel nobody hosts behaves exactly as before, commands included.
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    expect(() => { ctx.sidebarRight.toggleExpanded() }).toThrow('no session surface is mounted')
+    const release = ctx.sidebarRight.hostPanel('mmx')
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    // A second host of the same panel outlives the first one's disposer.
+    const second = ctx.sidebarRight.hostPanel('mmx')
+    release()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    second()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    // A claim on another panel leaves this one unhosted.
+    const elsewhere = ctx.sidebarRight.hostPanel('other')
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    layout.panelInfo.set({ activePanelId: 'other' })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    elsewhere()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    // The Conversation is unchanged by any claim.
+    layout.panelInfo.set({ activePanelId: null })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+  })
+
+  it('publishes whether the on-screen column is expanded', async () => {
+    const { ctx, layout, current, seat } = await boot()
+    const handle = seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
+    const instance = handle.create(SESSION)
+    // No Session on screen, nothing to read.
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(false)
+    current.set({ key: SESSION })
+    instance.actions.setExpanded(SESSION, true)
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(true)
+    expect(ctx.sidebarRight.isExpanded()).toBe(true)
+    // A hosted panel keeps the Session on screen, so the reading holds.
+    const release = ctx.sidebarRight.hostPanel('mmx')
+    layout.panelInfo.set({ activePanelId: 'mmx' })
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(true)
+    // Losing the last claim withdraws the Session without touching its state.
+    release()
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(false)
+    layout.panelInfo.set({ activePanelId: null })
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(true)
+    instance.actions.setExpanded(SESSION, false)
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(false)
+  })
+
   it('hands the panel seat the frame report, the room rule, the opens, the observable registry, and the Tab domain', async () => {
     const { ctx, layout, current, resources, seat, injectedOf } = await boot()
     const injected = injectedOf(seat('rightbar.session')) as SidebarRightInjected

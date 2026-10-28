@@ -36,6 +36,7 @@
 import { sidebarTargetFromElement, type SidebarRightTarget } from './focus.ts'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import { HostedPanels } from './hosted.ts'
 import type { FloatRect, PaneId, TabId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { activeDockPaneId, canSplit, findContentTab, findPaneContentTab, dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
@@ -75,6 +76,10 @@ interface SidebarRightSessions {
   readonly rooms: ReadonlyMap<SessionId, RoomRule>
   /** The Session the plugin names as on screen. */
   readonly onScreen: ObservableSnapshot<SessionId | undefined>
+  /** Whether the on-screen Session's column is showing its panel. */
+  readonly expanded: ObservableSnapshot<boolean>
+  /** The global `main` panels a plugin hosts the column beside. */
+  readonly hosted: HostedPanels
   /** Open tab metadata across saved and adopted Sessions. */
   readonly openTabs: SidebarTabInventory['source']
 }
@@ -97,15 +102,32 @@ export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin:
   const adopted = new Map<SessionId, Adoption>()
   const rooms = new Map<SessionId, RoomRule>()
   const onScreen = createSnapshotStore<SessionId | undefined>(undefined)
+  const expanded = createSnapshotStore(false)
+  const hosted = new HostedPanels()
   const inventory = new SidebarTabInventory()
-  const controller = new SidebarRightController(tabs, pin, host, { adopted, rooms, onScreen, openTabs: inventory.source })
+  /**
+   * Mirror the on-screen Session's expansion for subscribers. The store's own
+   * commits notify later than they commit, so this runs from the adoption's
+   * commit listener and from every change to which Session is on screen.
+   */
+  const syncExpanded = (): void => {
+    const sessionId = onScreen.getSnapshot()
+    const surface = sessionId === undefined ? undefined : adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]
+    const next = surface?.layout.expanded ?? false
+    if (expanded.getSnapshot() !== next) expanded.set(next)
+  }
+  const controller = new SidebarRightController(tabs, pin, host, { adopted, rooms, onScreen, expanded, hosted, openTabs: inventory.source })
   return {
     controller,
     forget: (sessionId) => {
       inventory.remove(sessionId)
       rooms.delete(sessionId)
     },
-    show: (sessionId) => { if (onScreen.getSnapshot() !== sessionId) onScreen.set(sessionId) },
+    show: (sessionId) => {
+      if (onScreen.getSnapshot() === sessionId) return
+      onScreen.set(sessionId)
+      syncExpanded()
+    },
     measure: (sessionId, canSplitPane) => { rooms.set(sessionId, canSplitPane) },
     adopt(sessionId, store) {
       adopted.get(sessionId)?.unsubscribe()
@@ -113,13 +135,16 @@ export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin:
         const surface = store.getSnapshot().bySession[sessionId]
         inventory.update(sessionId, Object.values(surface?.layout.tabs ?? {}))
         if (surface !== undefined) controller.tabDomain.sync(sessionId, surface.layout)
+        syncExpanded()
       }
       const adoption: Adoption = { store, unsubscribe: store.subscribe(sync) }
       adopted.set(sessionId, adoption)
       sync()
       return () => {
         adoption.unsubscribe()
-        if (adopted.get(sessionId) === adoption) adopted.delete(sessionId)
+        if (adopted.get(sessionId) !== adoption) return
+        adopted.delete(sessionId)
+        syncExpanded()
       }
     },
   }
@@ -195,6 +220,28 @@ export interface ISidebarRight {
    */
   readonly mounted: ObservableSnapshot<SessionId | undefined>
   /**
+   * Whether the on-screen Session's column is showing its panel, for a plugin
+   * header that draws a pressed toggle. It follows the same fact `isExpanded()`
+   * reads, as a subscription: `false` with no Session on screen and before the
+   * runtime mints that Session's store. The store's commits publish it after
+   * the commit, so a toggle redraws on the next frame rather than in the same
+   * one.
+   */
+  readonly expanded: ObservableSnapshot<boolean>
+  /**
+   * Let the column render beside a global `main` panel, and let every command
+   * on this face act on the selected Session while that panel is active.
+   *
+   * Call it inside `ctx.effect` and return its disposer, the way a tab type
+   * registers: the claim lasts as long as the calling plugin's effect. A panel
+   * that is not hosted hides the column exactly as before, and releasing the
+   * last claim while the panel is active hides it again. Claims are counted, so
+   * two plugins may host one panel without releasing each other.
+   * @param panelId - the panel's `main` registration key.
+   * @returns a disposer releasing this claim.
+   */
+  hostPanel(panelId: string): () => void
+  /**
    * Open a resource: claim it, place it, reveal the column, record the navigation.
    *
    * Without `options.kind` the registry ranks the types whose globs and
@@ -264,6 +311,11 @@ export class SidebarRightController implements ISidebarRight {
   readonly openTabs: SidebarTabInventory['source']
   /** The on-screen Session; see {@link ISidebarRight.mounted}. */
   readonly mounted: ObservableSnapshot<SessionId | undefined>
+  /** Whether the on-screen Session's column is showing its panel; see {@link ISidebarRight.expanded}. */
+  readonly expanded: ObservableSnapshot<boolean>
+  /** The hosted-panel set both gates read; see {@link ISidebarRight.hostPanel}. */
+  readonly hostedPanels: ObservableSnapshot<ReadonlySet<string>>
+  private readonly hosted: HostedPanels
   private readonly adopted: ReadonlyMap<SessionId, Adoption>
   private readonly rooms: ReadonlyMap<SessionId, RoomRule>
   private readonly closeHandlers = new Map<string, SidebarRightCloseHandler>()
@@ -301,8 +353,20 @@ export class SidebarRightController implements ISidebarRight {
     this.adopted = sessions.adopted
     this.rooms = sessions.rooms
     this.mounted = sessions.onScreen
+    this.expanded = sessions.expanded
+    this.hosted = sessions.hosted
+    this.hostedPanels = sessions.hosted.source
     this.openTabs = sessions.openTabs
     this.tabDomain = new TabDomain(this, pin)
+  }
+
+  /**
+   * Let the column render beside a global `main` panel.
+   * @param panelId - the panel's `main` registration key.
+   * @returns a disposer releasing this claim; see {@link ISidebarRight.hostPanel}.
+   */
+  hostPanel(panelId: string): () => void {
+    return this.hosted.host(panelId)
   }
 
   /**
