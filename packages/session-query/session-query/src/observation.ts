@@ -64,6 +64,13 @@ interface PreparedEntry {
   readonly events: readonly SessionEvent[]
   /** Active observation leases; a pinned entry (`refs > 0`) is never evicted. */
   refs: number
+  /**
+   * Whether the seed was read while the lease probe still reported a live
+   * holder, so the open final turn is unbalanced and every reuse must probe
+   * again: a settled writer never moves the revision, so the probe is the
+   * only validity signal for such an entry.
+   */
+  readonly liveWriter: boolean
 }
 
 /**
@@ -111,6 +118,15 @@ export class SessionObservationReader {
       const attachedDuringStat = this.ctx.sessions.get(sessionId)
       if (attachedDuringStat !== undefined) return this.live(attachedDuringStat, projectionMode)
       let entry = this.cachedEntry(persistence.identity, sessionId, snapshot.revision)
+      if (entry !== undefined && entry.liveWriter
+        && (await this.writerStillLive(persistence, sessionId, signal)) === false) {
+        // The cached seed was read while a live external writer held the
+        // lease, so it kept its open final turn unbalanced. The revision
+        // cannot expire it (a settled writer appends nothing more), so only
+        // a PROVEN settled probe reloads; a failed or unknown probe keeps
+        // the prior assumption (see writerStillLive).
+        entry = undefined
+      }
       if (entry === undefined) {
         const loaded = await this.loadSource(persistence, sessionId, signal)
         throwIfObservationAborted(signal)
@@ -144,6 +160,7 @@ export class SessionObservationReader {
           session,
           events: Object.freeze(seed),
           refs: 0,
+          liveWriter: loaded.liveWriter,
         }
         this.store(sessionId, entry)
       }
@@ -184,6 +201,25 @@ export class SessionObservationReader {
       )
     }
     return snapshot
+  }
+
+  /**
+   * Whether the lease probe still reports a live external writer. A probe
+   * failure says nothing about the holder's state, so such a read falls back
+   * to "unknown" and callers keep their prior assumption.
+   */
+  private async writerStillLive(
+    persistence: SessionPersistence,
+    sessionId: SessionId,
+    signal: AbortSignal | undefined,
+  ): Promise<boolean | undefined> {
+    try {
+      return (await persistence.writeLease(sessionId, signal === undefined ? undefined : { signal }))?.running === true
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') throw error
+      throwIfObservationAborted(signal)
+      return undefined
+    }
   }
 
   /** Read the complete balanced cold log, mapping backend failures to the query taxonomy. */

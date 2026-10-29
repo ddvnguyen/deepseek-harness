@@ -44,6 +44,24 @@ export {
 } from './storage-contract.ts'
 
 /**
+ * Best-effort liveness answer for one stored session's cross-process write
+ * lease. `running` means a write owner plausibly still holds the lease right
+ * now (the probe never proves exit: see {@link SessionPersistence.writeLease});
+ * `owner` carries the holder's opaque label when the holder recorded one.
+ */
+export interface SessionExternalWriterProbe {
+  /** Whether a write owner plausibly still holds the session's lease. */
+  readonly running: boolean
+  /** Opaque owner label the holder recorded (for example an external bridge), when present. */
+  readonly owner?: string
+}
+
+/** Options for {@link SessionPersistence.writeLease}. */
+export interface SessionPersistenceWriteLeaseOptions {
+  /** Optional cancellation for backend metadata reads. */
+  readonly signal?: AbortSignal
+}
+/**
  * Lightweight stored-session observation returned by {@link SessionPersistence.stat}
  * and {@link SessionPersistence.list} without reading the full event log.
  */
@@ -58,6 +76,14 @@ export interface SessionPersistenceSnapshot {
   readonly eventCount?: number
   /** Physical artifact byte size, when the backend can provide it cheaply (JSONL); otherwise absent. */
   readonly sizeBytes?: number
+  /**
+   * The session's write-lease probe ({@link SessionExternalWriterProbe}), when
+   * the backend can derive it from the artifact it just resolved without an
+   * extra id-resolution pass; absent otherwise, including routinely on
+   * unmaterialized sessions. Cheap listings read external liveness from here
+   * instead of one {@link SessionPersistence.writeLease} resolution per row.
+   */
+  readonly lease?: SessionExternalWriterProbe
 }
 
 /** Options for {@link SessionPersistence.create}. */
@@ -201,6 +227,36 @@ export abstract class SessionPersistence extends Service {
    * @returns one snapshot per stored session.
    */
   abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
+
+  /**
+   * Probe whether an external process plausibly still holds this session's
+   * cross-process write lease. Backends that can answer (a kernel lock with a
+   * durable holder record) report liveness from the holder's pid when one is
+   * recorded, and from a bounded lock-file mtime grace when the record is
+   * missing or torn; a released or never-acquired lease reports `undefined`.
+   * Backends that cannot distinguish external holders return `undefined`,
+   * which means "no live external writer" for every consumer: the same
+   * read-only assumption every read has always made.
+   *
+   * The probe is best-effort by design: it never wakes, waits for, or
+   * expropriates a holder, and a live-but-recordless holder can read as
+   * stopped after the grace window. Readers use it to distinguish an active
+   * external writer from a crashed one; it is never proof of exit.
+   * @param id - the stored session to probe.
+   * @param options - optional cancellation.
+   * @returns the live external-writer probe, or `undefined` when no live
+   *   external writer is proven.
+   * @throws backend failures that make liveness unanswerable, minus routine
+   *   I/O refusals which report `undefined` (an unreadable lease proves nothing).
+   */
+  writeLease(
+    id: SessionId,
+    options?: SessionPersistenceWriteLeaseOptions,
+  ): Promise<SessionExternalWriterProbe | undefined> {
+    void id
+    void options
+    return Promise.resolve(undefined)
+  }
 }
 
 export default SessionPersistence

@@ -410,9 +410,41 @@ abstract stat(id: SessionId, options?: SessionPersistenceStatOptions): Promise<S
  * @returns one snapshot per stored session.
  */
 abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
+
+/**
+ * Probe whether an external process plausibly still holds this session's
+ * cross-process write lease. Backends that can answer (a kernel lock with a
+ * durable holder record) report liveness from the holder's pid when one is
+ * recorded, and from a bounded lock-file mtime grace when the record is
+ * missing or torn; a released or never-acquired lease reports `undefined`.
+ * Backends that cannot distinguish external holders return `undefined`,
+ * which means "no live external writer" for every consumer: the same
+ * read-only assumption every read has always made.
+ *
+ * The probe is best-effort by design: it never wakes, waits for, or
+ * expropriates a holder, and a live-but-recordless holder can read as
+ * stopped after the grace window. Readers use it to distinguish an active
+ * external writer from a crashed one; it is never proof of exit.
+ * @param id - the stored session to probe.
+ * @param options - optional cancellation.
+ * @returns the live external-writer probe, or `undefined` when no live
+ *   external writer is proven.
+ * @throws backend failures that make liveness unanswerable, minus routine
+ *   I/O refusals which report `undefined` (an unreadable lease proves nothing).
+ */
+writeLease( id: SessionId, options?: SessionPersistenceWriteLeaseOptions, ): Promise<SessionExternalWriterProbe | undefined>
 ```
 
 Types: [SessionId](core.zh.md)
 
 Source: [`packages/session/session-persistence/src/index.ts`](../../packages/session/session-persistence/src/index.ts)
 <!-- END GENERATED cordis-surface -->
+
+## 外部写入方探测的边界
+
+`writeLease` 在锁记录命名持有者 pid 时按 pid 优先作答（pid-primary）。这条规则带来两个边界，与 `packages/util/atomic-write` 的锁契约一致：
+
+- **被复用的 pid 在其存活期内会被读作“运行中”。** 写入方非干净退出（`kill -9`）后，锁记录保留其 pid；之后恰好得到同一 pid 的无关进程会让探测继续报告“运行中”，直到该 pid 退出或通过干净关闭以 `0` 释放标记覆盖记录。租约本身始终可靠：flock 被持有时新写入方无法取得锁，后来的获取者也不会在探测过程中抹掉存活持有者的记录，因此这个误报被限定在该 pid 的一个生命周期内，且只影响展示（持别视图可能显示一个它实际看不到的“运行中”）。
+- **不同 pid 命名空间的读取方会把存活持者读作“已退出”。** 探测的 `kill(pid, 0)` 在读取方自己的命名空间内执行：另一（非共享）命名空间中的持有者解析为 `ESRCH`，探测将其读作“未运行”，读取方退回 mtime 宽限窗口。dsh-z 与 Multica 守护进程目前共享同一主机 pid 命名空间，通道内得到的是 pid 真实的存活答复；命名空间化的读取方只在每次追加之后的宽限窗口内是正确的。
+
+两条边界都只影响展示：它们不改变谁可以写入，且探测失败时消费者保持既有假设。

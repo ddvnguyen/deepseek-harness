@@ -735,6 +735,20 @@ export class SessionManager {
   }
 
   /**
+   * Apply one external-writer running-state change. The writer is by
+   * definition not this Host's Agent, so the row keeps `agentAvailable`
+   * false and no participation joins the engagement ledger. The label is
+   * already owned by the frame's consumer (the composer block raiser), so
+   * this handler carries only the running state.
+   * @param sessionId - Session whose external writer changed.
+   * @param running - whether that writer plausibly still holds the lease.
+   */
+  handleExternalWriterStatus(sessionId: SessionId, running: boolean): void {
+    this.recordMutation({ kind: 'status', sessionId, running, agentAvailable: false })
+    this.sessions.get(sessionId)?.handleRunning(running)
+  }
+
+  /**
    * Advance Session-list activity from one user-authored durable message.
    * @param sessionId - Session whose activity changed.
    * @param updatedAt - durable message timestamp.

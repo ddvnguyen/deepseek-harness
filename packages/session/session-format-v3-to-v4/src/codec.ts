@@ -17,19 +17,41 @@ function physicalV2(value: unknown): SessionFormatHeader {
 }
 
 /**
+ * Split the v4-only additive header field out of a physical (or logical)
+ * value before it reaches the released v2 framing, whose key set is pinned
+ * to its release and must tolerate no foreign field. The caller re-adds the
+ * field on its own returned object.
+ */
+function stripExternalOwner<T extends object>(value: T): { stripped: T; externalOwner: unknown } {
+  if (!('externalOwner' in value)) return { stripped: value, externalOwner: undefined }
+  const { externalOwner, ...stripped } = value
+  return { stripped: stripped as T, externalOwner }
+}
+
+/** Re-attach the optional v4-only header field after a released framing call. */
+function withExternalOwner<Header extends object>(header: Header, externalOwner: unknown): Header {
+  return externalOwner === undefined
+    ? header
+    : { ...header, externalOwner }
+}
+
+/**
  * V4 physical encoder and decoder retain the released row framing while
  * validating the native tool-role message directly.
  */
 export const releasedV4SessionFormatCodec = Object.freeze({
   version: 4,
   decodeHeader(value: unknown) {
-    return { ...releasedV2SessionFormatCodec.decodeHeader(physicalV2(value)), version: 4 }
+    const { stripped, externalOwner } = stripExternalOwner(physicalV2(value))
+    return { ...withExternalOwner(releasedV2SessionFormatCodec.decodeHeader(stripped), externalOwner), version: 4 }
   },
   createDecoder(value, recovery) {
-    const decoder = releasedV2SessionFormatCodec.createDecoder(physicalV2(value), recovery)
+    const { stripped, externalOwner } = stripExternalOwner(physicalV2(value))
+    const decoder = releasedV2SessionFormatCodec.createDecoder(stripped, recovery)
+    const header = { ...withExternalOwner(decoder.header, externalOwner), version: 4 }
     return {
       ...decoder,
-      header: { ...decoder.header, version: 4 },
+      header,
       decodeRow(row, context) {
         assertV4RowAdmission(row)
         decoder.decodeRow(row, {
@@ -41,7 +63,9 @@ export const releasedV4SessionFormatCodec = Object.freeze({
   },
   encodeHeader(header, inheritedEventCount) {
     assertReleasedV4Header(header)
-    return { ...releasedV2SessionFormatCodec.encodeHeader({ ...header, version: 2 }, inheritedEventCount), version: 4 }
+    const { stripped, externalOwner } = stripExternalOwner({ ...header, version: 2 })
+    const encoded = releasedV2SessionFormatCodec.encodeHeader(stripped as SessionFormatHeader, inheritedEventCount)
+    return { ...withExternalOwner(encoded, externalOwner), version: 4 }
   },
   encodeEvent(event: SessionFormatEvent) {
     if (event.type === 'developer/message' && event['ignorable'] === true) {

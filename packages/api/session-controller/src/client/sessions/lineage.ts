@@ -27,6 +27,8 @@ export interface SessionListEntry {
   parentSessionId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent'
+  /** Opaque external-producer label stamped at create; absent for sessions owned by this process. */
+  externalOwner?: string
   /** Format classification supplied by the Host list. */
   formatStatus?: SessionSummary['formatStatus']
   cwd?: string

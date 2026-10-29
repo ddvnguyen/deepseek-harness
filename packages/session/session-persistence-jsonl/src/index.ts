@@ -27,13 +27,15 @@ import {
   assertStoredId, materializeCreateHeader, sessionFormatVersionRefusal, validateStoredEvents,
   type SessionAccess, type SessionHandle,
   type SessionHandleReadResult,
+  type SessionExternalWriterProbe,
   type SessionLocation, type SessionPersistenceCreateOptions,
   type SessionPersistenceListOptions, type SessionPersistenceOpenOptions,
   type SessionPersistenceSnapshot, type SessionPersistenceStatOptions,
+  type SessionPersistenceWriteLeaseOptions,
   type SessionPersistenceRevision as PersistenceRevision,
 } from '@deepseek-ai/dsh-session-persistence'
 import { JsonlBackendTracker, JsonlSessionHandle, type StorageHandleState } from './storage.ts'
-import { SessionWriteLease } from './lease.ts'
+import { SessionWriteLease, externalWriterLeaseProbe } from './lease.ts'
 import { SESSION_FORMAT_VERSION, SessionId as makeSessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId, SessionHeader, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import {
@@ -498,12 +500,14 @@ class JsonlSessionPersistence extends SessionPersistence {
     try {
       const identity = await stat(selected.sourcePath, { bigint: true })
       options?.signal?.throwIfAborted()
+      const writer = await externalWriterLeaseProbe(dirname(selected.currentPath))
       return {
         ...metadata,
         revision: selected.sourceVersion < SESSION_FORMAT_VERSION
           ? SessionPersistenceRevision(`${fileRevision(identity)}:${await this.historicalCorpusRevision(options?.signal)}`)
           : fileRevision(identity),
         sizeBytes: Number(identity.size),
+        ...(writer === undefined ? {} : { lease: writer }),
       }
     } catch (error: unknown) {
       options?.signal?.throwIfAborted()
@@ -531,10 +535,14 @@ class JsonlSessionPersistence extends SessionPersistence {
       ? await this.historicalCorpusRevision(signal) : undefined
     const statted = settledValues(await settleLimited(this.listLimit, artifacts, async (artifact) => {
       signal?.throwIfAborted()
+      // The lease record lives beside the resolved artifact, so the listing
+      // probe is one directed read here — never one id-resolution pass per row.
+      const writer = await externalWriterLeaseProbe(dirname(artifact.path))
+      signal?.throwIfAborted()
       try {
         const identity = await stat(artifact.path, { bigint: true })
         signal?.throwIfAborted()
-        return { artifact, identity }
+        return { artifact, identity, writer }
       } catch (error: unknown) {
         signal?.throwIfAborted()
         if (!isENOENT(error)) throw error
@@ -543,7 +551,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     }))
     for (const entry of statted) {
       if (entry === undefined) continue
-      const { artifact, identity } = entry
+      const { artifact, identity, writer } = entry
       listed.add(artifact.header.id)
       snapshots.push({
         header: artifact.header,
@@ -552,6 +560,7 @@ class JsonlSessionPersistence extends SessionPersistence {
           ? SessionPersistenceRevision(`${fileRevision(identity)}:${corpusRevision}`)
           : fileRevision(identity),
         sizeBytes: Number(identity.size),
+        ...(writer === undefined ? {} : { lease: writer }),
       })
     }
     for (const [id, entry] of pending) {
@@ -559,6 +568,31 @@ class JsonlSessionPersistence extends SessionPersistence {
     }
     signal?.throwIfAborted()
     return snapshots
+  }
+
+  /**
+   * Probe the session's cross-process write lease from its durable holder
+   * record; see the seam contract and `lease.ts` for the decision order. A
+   * this-process pending (created-but-unmaterialized) session has no lock
+   * file yet, so it reports `undefined` exactly like a foreign reader does.
+   * @param id - the stored session to probe.
+   * @param options - optional cancellation.
+   * @returns the live external-writer probe, or `undefined` when no live
+   *   external writer is proven (including on Windows, where the lease has
+   *   no file).
+   */
+  override async writeLease(
+    id: SessionId,
+    options?: SessionPersistenceWriteLeaseOptions,
+  ): Promise<SessionExternalWriterProbe | undefined> {
+    options?.signal?.throwIfAborted()
+    await this.ensureRootEncoding()
+    options?.signal?.throwIfAborted()
+    if (this.tracker.pendingOf(id) !== undefined) return undefined
+    const selected = await this.findLog(id, options?.signal)
+    if (selected === undefined) return undefined
+    options?.signal?.throwIfAborted()
+    return externalWriterLeaseProbe(dirname(selected.currentPath))
   }
 
   // --- handle-facing storage internals (package-private via the handle class below) ---

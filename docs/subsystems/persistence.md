@@ -410,9 +410,40 @@ abstract stat(id: SessionId, options?: SessionPersistenceStatOptions): Promise<S
  * @returns one snapshot per stored session.
  */
 abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
+
+/**
+ * Probe whether an external process plausibly still holds this session's
+ * cross-process write lease. Backends that can answer (a kernel lock with a
+ * durable holder record) report liveness from the holder's pid when one is
+ * recorded, and from a bounded lock-file mtime grace when the record is
+ * missing or torn; a released or never-acquired lease reports `undefined`.
+ * Backends that cannot distinguish external holders return `undefined`,
+ * which means "no live external writer" for every consumer: the same
+ * read-only assumption every read has always made.
+ *
+ * The probe is best-effort by design: it never wakes, waits for, or
+ * expropriates a holder, and a live-but-recordless holder can read as
+ * stopped after the grace window. Readers use it to distinguish an active
+ * external writer from a crashed one; it is never proof of exit.
+ * @param id - the stored session to probe.
+ * @param options - optional cancellation.
+ * @returns the live external-writer probe, or `undefined` when no live
+ *   external writer is proven.
+ * @throws backend failures that make liveness unanswerable, minus routine
+ *   I/O refusals which report `undefined` (an unreadable lease proves nothing).
+ */
+writeLease( id: SessionId, options?: SessionPersistenceWriteLeaseOptions, ): Promise<SessionExternalWriterProbe | undefined>
 ```
 
 Types: [SessionId](core.md)
 
 Source: [`packages/session/session-persistence/src/index.ts`](../../packages/session/session-persistence/src/index.ts)
 <!-- END GENERATED cordis-surface -->
+## External-writer probe limits
+
+`writeLease` answers from the holder's pid when the lock record names one (pid-primary). Two limits follow from that rule, both the same `packages/util/atomic-write` lock contract accepts:
+
+- **A recycled pid reads as running for as long as that pid lives.** After an unclean writer death (`kill -9`), the surviving lock record keeps the dead pid; a later unrelated process that happens to receive the same pid makes the probe report "running" until that pid exits or releases the lease (a clean close overwrites the record with the `0` release marker). The lease itself stays sound: a new writer cannot acquire the lock while the flock is held, and a successor cannot erase a live holder's record mid-acquisition, so the wrong answer is bounded to that one pid's lifetime and is presentation-only (a held view may show "running" it cannot actually see).
+- **A different pid namespace reads a live owner as exited.** The probe's `kill(pid, 0)` runs against the viewer's own namespace: an owner in another (non-shared) namespace resolves to `ESRCH`, which the probe reads as "not running", and such a viewer falls back to the mtime grace window. dsh-z and the Multica daemon share one host pid namespace today, so the lane answers pid-true liveness; a namespaced viewer is only right for the grace window after each append.
+
+Both limits are presentation-only: they never change who may write, and every consumer keeps its prior assumption on a failed probe.

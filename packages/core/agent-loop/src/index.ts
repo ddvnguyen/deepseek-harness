@@ -24,7 +24,7 @@ import type {
 } from '@deepseek-ai/dsh-agent'
 import { errorChain, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { interruptedTurnClosers, SessionLogOffset, SessionPreparation, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { CreateSessionOptions, Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-session-projection'
@@ -686,7 +686,9 @@ export class AgentLoop extends Service implements AgentFactory {
    * @returns the published running agent.
    */
   async create(id: SessionId, options: AgentOptions = {}, meta: Pick<SessionHeader, 'cwd'> = {}): Promise<Agent> {
-    using preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(id, { meta }))
+    const merged = applyExternalOwnerMeta(meta, processExternalOwner())
+    const stamped: CreateSessionOptions = merged === undefined ? {} : { meta: merged }
+    using preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(id, stamped))
     const stored = await this.createStoredSession(preparation.session)
     let prepared: PreparedAgent
     try {
@@ -748,11 +750,13 @@ export class AgentLoop extends Service implements AgentFactory {
    * @returns the published handle.
    */
   async createAgent(ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> {
-    const preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(options.sessionId, {
-      ...options.seed === undefined ? {} : { seed: options.seed },
-      ...options.meta === undefined ? {} : { meta: options.meta },
-      ...options.inheritedEventCount === undefined ? {} : { inheritedEventCount: options.inheritedEventCount },
-    }))
+    const meta = applyExternalOwnerMeta(options.meta, processExternalOwner())
+    const stamped: CreateSessionOptions = {
+      ...(options.seed === undefined ? {} : { seed: options.seed }),
+      ...(options.inheritedEventCount === undefined ? {} : { inheritedEventCount: options.inheritedEventCount }),
+      ...(meta === undefined ? {} : { meta }),
+    }
+    const preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(options.sessionId, stamped))
     const published = (async () => {
       let stored: StoredSession | undefined
       try {
@@ -924,6 +928,40 @@ export class AgentLoop extends Service implements AgentFactory {
     this.ownership.trackWrapper(published)
     return published
   }
+}
+
+/**
+ * Process environment variable whose single-line value names the external
+ * producer of this harness process — an opaque label such as
+ * `"Multica run M-142"` that an external bridge sets when it launches this
+ * writer. The harness only records the label (fresh-session header plus the
+ * write lease it acquires); it never interprets it.
+ */
+const SESSION_OWNER_ENV = 'DSH_SESSION_OWNER'
+
+/** Long enough for a run identifier, short enough to stay one record line. */
+const SESSION_OWNER_MAX = 100
+
+/** This process's single-line external-owner label, or `undefined`. */
+function processExternalOwner(): string | undefined {
+  const raw = process.env[SESSION_OWNER_ENV]
+  if (raw === undefined) return undefined
+  const label = raw.replace(/[\v\f\n\r\u2028\u2029]+/gu, ' ').trim().slice(0, SESSION_OWNER_MAX)
+  return label === '' ? undefined : label
+}
+
+/**
+ * Merge this process's external-owner label into a fresh session's creation
+ * metadata. An explicit caller-supplied label wins; an absent one stays
+ * absent, so credentials-less or same-process environments stamp nothing.
+ */
+function applyExternalOwnerMeta(
+  meta: CreateSessionOptions['meta'] | undefined,
+  configured: string | undefined,
+): CreateSessionOptions['meta'] | undefined {
+  if (configured === undefined) return meta
+  if (meta === undefined) return { externalOwner: configured }
+  return meta.externalOwner === undefined ? { ...meta, externalOwner: configured } : meta
 }
 
 export default AgentLoop

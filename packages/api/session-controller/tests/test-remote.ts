@@ -212,6 +212,9 @@ export function testSessionPersistence(
       return testReadHandle(sessionId, inspection)
     }
   }
+  if (persistence.writeLease === undefined) {
+    adapted.writeLease = async (): Promise<undefined> => undefined
+  }
   return adapted
 }
 

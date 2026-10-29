@@ -19,7 +19,7 @@ import { assertV4ToolResultMessage } from './tool-role.ts'
 export function assertReleasedV4Header(header: unknown): void {
   if (!isSessionFormatJsonObject(header) || header['version'] !== 4) throw new SessionFormatError('expected format v4 header')
   const required = ['version', 'id', 'createdAt', 'isSeeded', 'delegationDepth']
-  const allowed = new Set([...required, 'cwd', 'parentSession', 'origin', 'agentPreset'])
+  const allowed = new Set([...required, 'cwd', 'parentSession', 'origin', 'agentPreset', 'externalOwner'])
   const missing = required.find(key => !Object.hasOwn(header, key))
   const unexpected = Object.keys(header).find(key => !allowed.has(key))
   if (missing !== undefined) throw new SessionFormatError(`format v4 header lacks required field ${missing}`)
@@ -31,7 +31,7 @@ export function assertReleasedV4Header(header: unknown): void {
   if (header.cwd !== undefined && (typeof header.cwd !== 'string' || !isAbsolute(header.cwd))) {
     throw new SessionFormatError('format v4 header cwd must be absolute')
   }
-  for (const key of ['parentSession', 'agentPreset']) {
+  for (const key of ['parentSession', 'agentPreset', 'externalOwner']) {
     if (header[key] !== undefined && typeof header[key] !== 'string') {
       throw new SessionFormatError(`format v4 header ${key} must be a string`)
     }

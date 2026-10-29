@@ -187,6 +187,8 @@ export interface SessionSummary {
   readonly parentSessionId?: SessionId
   readonly origin?: 'subagent'
   readonly cwd?: string
+  /** Opaque external-producer label stamped at create; absent for sessions owned by this process. */
+  readonly externalOwner?: string
   readonly projections?: SessionProjectionHints
 }
 
@@ -458,6 +460,8 @@ export interface SessionWireHeader {
   readonly origin?: 'subagent'
   readonly delegationDepth?: number
   readonly agentPreset?: string
+  /** Opaque external-producer label stamped at create; absent for sessions owned by this process. */
+  readonly externalOwner?: string
 }
 
 /** Browser wire surface operation; replacement endpoints are earlier event seqs in surface order. */
@@ -614,12 +618,16 @@ declare module '@deepseek-ai/cordis' {
      */
     'api-session/removed'(sessionId: SessionId): void
     /**
-     * One Agent changed running state.
+     * One Agent changed running state, or (with an external owner label)
+     * an externally owned stored Session's write lease gained or lost its
+     * live holder.
      * @mode emit
      * @param sessionId - Agent and Session identity.
      * @param running - whether the Agent is running.
+     * @param owner - for an external-writer transition: the holder's opaque
+     *   label, or null when none was recorded; undefined for an Agent transition.
      */
-    'api-session/status'(sessionId: SessionId, running: boolean): void
+    'api-session/status'(sessionId: SessionId, running: boolean, owner?: string | null): void
     /**
      * One user-authored durable message advanced Session list activity.
      * @mode emit

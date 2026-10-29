@@ -2263,6 +2263,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'options', description: 'optional cancellation.' }],
         returns: 'one snapshot per stored session.',
       },
+      {
+        signature: 'writeLease( id: SessionId, options?: SessionPersistenceWriteLeaseOptions, ): Promise<SessionExternalWriterProbe | undefined>',
+        description: 'Probe whether an external process plausibly still holds this session\'s cross-process write lease. Backends that can answer (a kernel lock with a durable holder record) report liveness from the holder\'s pid when one is recorded, and from a bounded lock-file mtime grace when the record is missing or torn; a released or never-acquired lease reports `undefined`. Backends that cannot distinguish external holders return `undefined`, which means "no live external writer" for every consumer: the same read-only assumption every read has always made.\n\nThe probe is best-effort by design: it never wakes, waits for, or expropriates a holder, and a live-but-recordless holder can read as stopped after the grace window. Readers use it to distinguish an active external writer from a crashed one; it is never proof of exit.',
+        parameters: [{ name: 'id', description: 'the stored session to probe.' }, { name: 'options', description: 'optional cancellation.' }],
+        returns: 'the live external-writer probe, or `undefined` when no live external writer is proven.',
+        throws: ['backend failures that make liveness unanswerable, minus routine I/O refusals which report `undefined` (an unreadable lease proves nothing).'],
+      },
     ],
   },
   {
@@ -4144,10 +4151,10 @@ export const EVENT_API: readonly EventApiEntry[] = [
   {
     name: 'api-session/status',
     mode: 'emit',
-    signature: '\'api-session/status\'(sessionId: SessionId, running: boolean): void',
-    summary: 'One Agent changed running state.',
-    description: 'One Agent changed running state.',
-    parameters: [{ name: 'sessionId', description: 'Agent and Session identity.' }, { name: 'running', description: 'whether the Agent is running.' }],
+    signature: '\'api-session/status\'(sessionId: SessionId, running: boolean, owner?: string | null): void',
+    summary: 'One Agent changed running state, or (with an external owner label) an externally owned stored Session\'s write lease gained or lost its live holder.',
+    description: 'One Agent changed running state, or (with an external owner label) an externally owned stored Session\'s write lease gained or lost its live holder.',
+    parameters: [{ name: 'sessionId', description: 'Agent and Session identity.' }, { name: 'running', description: 'whether the Agent is running.' }, { name: 'owner', description: 'for an external-writer transition: the holder\'s opaque label, or null when none was recorded; undefined for an Agent transition.' }],
   },
   {
     name: 'app-boot/config-reload',
@@ -5247,7 +5254,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateAgentOptions',
-    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly parentAgent?: Agent;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
+    declaration: 'export interface CreateAgentOptions {\n    readonly sessionId: SessionId;\n    readonly parentAgent?: Agent;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n        readonly externalOwner?: string;\n    };\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly seed?: readonly SessionEvent[];\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
   {
     name: 'CreatedWorktree',
@@ -5263,7 +5270,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CreateSessionOptions',
-    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n    };\n}',
+    declaration: 'export interface CreateSessionOptions {\n    readonly seed?: readonly SessionEvent[];\n    readonly inheritedEventCount?: SessionLogOffset;\n    readonly meta?: {\n        readonly cwd?: string;\n        readonly parentSession?: SessionId;\n        readonly createdAt?: number;\n        readonly isSeeded?: boolean;\n        readonly origin?: \'subagent\';\n        readonly delegationDepth?: number;\n        readonly agentPreset?: string;\n        readonly externalOwner?: string;\n    };\n}',
   },
   {
     name: 'CreateTeamTaskRequest',
@@ -7150,6 +7157,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionEventWindow {\n    session: SessionHeader;\n    inheritedEventCount: SessionLogOffset;\n    target: SessionEvent;\n    events: SessionEvent[];\n    startSeq: SessionSeq;\n    endSeq: SessionSeq;\n}',
   },
   {
+    name: 'SessionExternalWriterProbe',
+    declaration: 'export interface SessionExternalWriterProbe {\n    readonly running: boolean;\n    readonly owner?: string;\n}',
+  },
+  {
     name: 'SessionFeedbackRecordRequest',
     declaration: 'export interface SessionFeedbackRecordRequest {\n    readonly sessionId: SessionId;\n    readonly text?: string;\n    readonly category?: FeedbackCategory;\n}',
   },
@@ -7207,7 +7218,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionHeader',
-    declaration: 'export interface SessionHeader {\n    readonly version: typeof SESSION_FORMAT_VERSION;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionHeader {\n    readonly version: typeof SESSION_FORMAT_VERSION;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n    readonly externalOwner?: string;\n}',
   },
   {
     name: 'SessionHistoryRecord',
@@ -7315,11 +7326,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionPersistenceSnapshot',
-    declaration: 'export interface SessionPersistenceSnapshot {\n    readonly header: SessionHeader;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly revision: SessionPersistenceRevision;\n    readonly eventCount?: number;\n    readonly sizeBytes?: number;\n}',
+    declaration: 'export interface SessionPersistenceSnapshot {\n    readonly header: SessionHeader;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly revision: SessionPersistenceRevision;\n    readonly eventCount?: number;\n    readonly sizeBytes?: number;\n    readonly lease?: SessionExternalWriterProbe;\n}',
   },
   {
     name: 'SessionPersistenceStatOptions',
     declaration: 'export interface SessionPersistenceStatOptions {\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'SessionPersistenceWriteLeaseOptions',
+    declaration: 'export interface SessionPersistenceWriteLeaseOptions {\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'SessionProjectionBaseline',
@@ -7367,7 +7382,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionRecord',
-    declaration: 'export interface SessionRecord {\n    header: SessionHeader;\n    live: boolean;\n    persisted: boolean;\n    formatStatus?: \'current\' | \'migration-required\';\n}',
+    declaration: 'export interface SessionRecord {\n    header: SessionHeader;\n    live: boolean;\n    persisted: boolean;\n    formatStatus?: \'current\' | \'migration-required\';\n    lease?: SessionExternalWriterProbe;\n}',
   },
   {
     name: 'SessionReferenceCandidate',
@@ -7463,7 +7478,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionSummary',
-    declaration: 'export interface SessionSummary {\n    readonly agentAvailable: boolean;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly sessionId: SessionId;\n    readonly updatedAt: number;\n    readonly running: boolean;\n    readonly blank: boolean;\n    readonly parentSessionId?: SessionId;\n    readonly origin?: \'subagent\';\n    readonly cwd?: string;\n    readonly projections?: SessionProjectionHints;\n}',
+    declaration: 'export interface SessionSummary {\n    readonly agentAvailable: boolean;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly sessionId: SessionId;\n    readonly updatedAt: number;\n    readonly running: boolean;\n    readonly blank: boolean;\n    readonly parentSessionId?: SessionId;\n    readonly origin?: \'subagent\';\n    readonly cwd?: string;\n    readonly externalOwner?: string;\n    readonly projections?: SessionProjectionHints;\n}',
   },
   {
     name: 'SessionSurface',
@@ -7543,7 +7558,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionWireHeader',
-    declaration: 'export interface SessionWireHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n}',
+    declaration: 'export interface SessionWireHeader {\n    readonly version: number;\n    readonly id: SessionId;\n    readonly createdAt: number;\n    readonly cwd?: string;\n    readonly parentSession?: SessionId;\n    readonly isSeeded: boolean;\n    readonly origin?: \'subagent\';\n    readonly delegationDepth?: number;\n    readonly agentPreset?: string;\n    readonly externalOwner?: string;\n}',
   },
   {
     name: 'SessionWorkspacePathApplication',
