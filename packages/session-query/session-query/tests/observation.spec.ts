@@ -339,6 +339,38 @@ describe('SessionObservationReader cold path', () => {
     await ctx.fiber.dispose()
   })
 
+  it('keeps the live-read assumption when the reuse probe fails, and reloads only on a proven settle', async () => {
+    const ctx = await readerContext()
+    const meta = header('interrupted-probe-unknown')
+    const store = new Map([[meta.id, { header: meta, events: interruptedLog('in-flight'), revision: 'r1' }]])
+    const counters = { stat: 0, open: 0, read: 0 }
+    ctx.provide('sessionPersistence', stubPersistence(store, counters, {}))
+    // First probe: live (the seed is read unbalanced). Every later probe:
+    // refused — unknown, not settled.
+    let probeCalls = 0
+    const persistence = ctx.get('sessionPersistence') as unknown as {
+      writeLease: (sessionId: string) => Promise<unknown>
+    }
+    vi.spyOn(persistence, 'writeLease').mockImplementation(() => {
+      probeCalls += 1
+      if (probeCalls === 1) return Promise.resolve({ running: true })
+      return Promise.reject(new Error('probe refused'))
+    })
+    const reader = new SessionObservationReader(ctx)
+
+    using liveObservation = await reader.read(meta.id)
+    expect(liveObservation.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+
+    // The reuse probe refuses: unknown, not settled. The prior (live-read)
+    // assumption stands and the unbalanced seed stays cached.
+    const unknown = await reader.read(meta.id, { projectionMode: 'none' })
+    expect(unknown.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+    // One read cycle only: no reload churn behind the same revision.
+    expect(counters.read).toBe(1)
+    expect(probeCalls).toBe(2)
+    await ctx.fiber.dispose()
+  })
+
   it('serves an unchanged revision from its cache without re-reading the log', async () => {
     const ctx = await readerContext()
     const meta = header('cache-hit')

@@ -2264,11 +2264,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'one snapshot per stored session.',
       },
       {
-        signature: 'readonly probesWriteLease: boolean = false',
-        description: 'Whether this backend writeLease|probes anything: the default implementation answers `undefined` without I/O, so a listing that would pay one await per cold row probes only backends that actually implement the lease probe.',
-        parameters: [],
-      },
-      {
         signature: 'writeLease( id: SessionId, options?: SessionPersistenceWriteLeaseOptions, ): Promise<SessionExternalWriterProbe | undefined>',
         description: 'Probe whether an external process plausibly still holds this session\'s cross-process write lease. Backends that can answer (a kernel lock with a durable holder record) report liveness from the holder\'s pid when one is recorded, and from a bounded lock-file mtime grace when the record is missing or torn; a released or never-acquired lease reports `undefined`. Backends that cannot distinguish external holders return `undefined`, which means "no live external writer" for every consumer: the same read-only assumption every read has always made.\n\nThe probe is best-effort by design: it never wakes, waits for, or expropriates a holder, and a live-but-recordless holder can read as stopped after the grace window. Readers use it to distinguish an active external writer from a crashed one; it is never proof of exit.',
         parameters: [{ name: 'id', description: 'the stored session to probe.' }, { name: 'options', description: 'optional cancellation.' }],
@@ -7331,7 +7326,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionPersistenceSnapshot',
-    declaration: 'export interface SessionPersistenceSnapshot {\n    readonly header: SessionHeader;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly revision: SessionPersistenceRevision;\n    readonly eventCount?: number;\n    readonly sizeBytes?: number;\n}',
+    declaration: 'export interface SessionPersistenceSnapshot {\n    readonly header: SessionHeader;\n    readonly formatStatus?: \'current\' | \'migration-required\';\n    readonly revision: SessionPersistenceRevision;\n    readonly eventCount?: number;\n    readonly sizeBytes?: number;\n    readonly lease?: SessionExternalWriterProbe;\n}',
   },
   {
     name: 'SessionPersistenceStatOptions',
@@ -7387,7 +7382,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionRecord',
-    declaration: 'export interface SessionRecord {\n    header: SessionHeader;\n    live: boolean;\n    persisted: boolean;\n    formatStatus?: \'current\' | \'migration-required\';\n}',
+    declaration: 'export interface SessionRecord {\n    header: SessionHeader;\n    live: boolean;\n    persisted: boolean;\n    formatStatus?: \'current\' | \'migration-required\';\n    lease?: SessionExternalWriterProbe;\n}',
   },
   {
     name: 'SessionReferenceCandidate',

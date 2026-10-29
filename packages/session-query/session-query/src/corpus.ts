@@ -65,12 +65,13 @@ export class SessionCorpus {
     const persisted = persistence === undefined ? [] : await listPersisted(persistence, signal)
     signal?.throwIfAborted()
     const records = new Map<SessionId, SessionRecord>()
-    for (const { header, formatStatus } of persisted) {
+    for (const { header, formatStatus, lease } of persisted) {
       records.set(header.id, {
         header: structuredClone(header),
         live: false,
         persisted: true,
         ...(formatStatus === undefined ? {} : { formatStatus }),
+        ...(lease === undefined ? {} : { lease }),
       })
     }
     for (const session of this._ctx.sessions.list()) {

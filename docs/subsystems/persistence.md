@@ -439,3 +439,11 @@ Types: [SessionId](core.md)
 
 Source: [`packages/session/session-persistence/src/index.ts`](../../packages/session/session-persistence/src/index.ts)
 <!-- END GENERATED cordis-surface -->
+## External-writer probe limits
+
+`writeLease` answers from the holder's pid when the lock record names one (pid-primary). Two limits follow from that rule, both the same `packages/util/atomic-write` lock contract accepts:
+
+- **A recycled pid reads as running for as long as that pid lives.** After an unclean writer death (`kill -9`), the surviving lock record keeps the dead pid; a later unrelated process that happens to receive the same pid makes the probe report "running" until that pid exits or releases the lease (a clean close overwrites the record with the `0` release marker). The lease itself stays sound: a new writer cannot acquire the lock while the flock is held, and a successor cannot erase a live holder's record mid-acquisition, so the wrong answer is bounded to that one pid's lifetime and is presentation-only (a held view may show "running" it cannot actually see).
+- **A different pid namespace reads a live owner as exited.** The probe's `kill(pid, 0)` runs against the viewer's own namespace: an owner in another (non-shared) namespace resolves to `ESRCH`, which the probe reads as "not running", and such a viewer falls back to the mtime grace window. dsh-z and the Multica daemon share one host pid namespace today, so the lane answers pid-true liveness; a namespaced viewer is only right for the grace window after each append.
+
+Both limits are presentation-only: they never change who may write, and every consumer keeps its prior assumption on a failed probe.

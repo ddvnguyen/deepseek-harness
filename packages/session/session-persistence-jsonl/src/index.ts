@@ -294,9 +294,6 @@ class JsonlSessionPersistence extends SessionPersistence {
   /** Backend label for diagnostics and effects; shadows `Service.name` without changing the service key. */
   override readonly name = 'session-persistence-jsonl'
 
-  /** This backend reads durable holder records, so cold-row listing probes it. */
-  override readonly probesWriteLease = true
-
   private root: string
   private compression: JsonlCompression
   /**
@@ -503,12 +500,14 @@ class JsonlSessionPersistence extends SessionPersistence {
     try {
       const identity = await stat(selected.sourcePath, { bigint: true })
       options?.signal?.throwIfAborted()
+      const writer = await externalWriterLeaseProbe(dirname(selected.currentPath))
       return {
         ...metadata,
         revision: selected.sourceVersion < SESSION_FORMAT_VERSION
           ? SessionPersistenceRevision(`${fileRevision(identity)}:${await this.historicalCorpusRevision(options?.signal)}`)
           : fileRevision(identity),
         sizeBytes: Number(identity.size),
+        ...(writer === undefined ? {} : { lease: writer }),
       }
     } catch (error: unknown) {
       options?.signal?.throwIfAborted()
@@ -536,10 +535,14 @@ class JsonlSessionPersistence extends SessionPersistence {
       ? await this.historicalCorpusRevision(signal) : undefined
     const statted = settledValues(await settleLimited(this.listLimit, artifacts, async (artifact) => {
       signal?.throwIfAborted()
+      // The lease record lives beside the resolved artifact, so the listing
+      // probe is one directed read here — never one id-resolution pass per row.
+      const writer = await externalWriterLeaseProbe(dirname(artifact.path))
+      signal?.throwIfAborted()
       try {
         const identity = await stat(artifact.path, { bigint: true })
         signal?.throwIfAborted()
-        return { artifact, identity }
+        return { artifact, identity, writer }
       } catch (error: unknown) {
         signal?.throwIfAborted()
         if (!isENOENT(error)) throw error
@@ -548,7 +551,7 @@ class JsonlSessionPersistence extends SessionPersistence {
     }))
     for (const entry of statted) {
       if (entry === undefined) continue
-      const { artifact, identity } = entry
+      const { artifact, identity, writer } = entry
       listed.add(artifact.header.id)
       snapshots.push({
         header: artifact.header,
@@ -557,6 +560,7 @@ class JsonlSessionPersistence extends SessionPersistence {
           ? SessionPersistenceRevision(`${fileRevision(identity)}:${corpusRevision}`)
           : fileRevision(identity),
         sizeBytes: Number(identity.size),
+        ...(writer === undefined ? {} : { lease: writer }),
       })
     }
     for (const [id, entry] of pending) {

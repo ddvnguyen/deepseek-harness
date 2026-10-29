@@ -34,6 +34,9 @@ const statFailure = vi.hoisted(() => ({
   error: undefined as Error | undefined,
 }))
 
+/** A session's durable holder record (`session.lock`): not a log body. */
+const LEASE_FILE = vi.hoisted(() => /session\.lock$/u)
+
 const readdirFailure = vi.hoisted(() => ({
   path: undefined as string | undefined,
   error: undefined as Error | undefined,
@@ -101,8 +104,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     readFile: (async (...args: Parameters<typeof actual.readFile>) => {
       const path = typeof args[0] === 'string' ? args[0] : undefined
       if (path === readFailure.path && readFailure.error !== undefined) throw readFailure.error
-      if (readTally.enabled && path !== undefined) {
-        readTally.bySuffix.set(path, (readTally.bySuffix.get(path) ?? 0) + 1)
+      // The lease record beside the log is not a log body: the listing and
+      // stat surfaces probe it by design (see the snapshot's `lease` field).
+      if (path === undefined || !LEASE_FILE.test(path)) {
+        if (readTally.enabled && path !== undefined) {
+          readTally.bySuffix.set(path, (readTally.bySuffix.get(path) ?? 0) + 1)
+        }
       }
       if (path !== pausedRead.path || pausedRead.resume === undefined) {
         return actual.readFile(...args)

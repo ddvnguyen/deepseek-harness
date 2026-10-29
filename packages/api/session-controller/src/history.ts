@@ -222,54 +222,57 @@ export class SessionHistoryController {
         tailSignal => this.readPersistedEvents(address, tailSignal),
       )
       try {
-        // The wake seat is armed across the tail tick as well: an abort (or
-        // any notification) landing during the observation has settled the
-        // seat by the time the loop reaches its own await.
-        const { promise, resolve } = Promise.withResolvers<void>()
-        wake = resolve
-        try {
-          while (!follower.closed && !signal.aborted) {
-            const item = buffered.popFront()
-            if (item === undefined) {
-              const tick = await tailer.completeTick(signal)
-              if (tick === 'wait') {
-                const timer = setTimeout(resolve, EXTERNAL_TAIL_POLL_MS)
-                try {
-                  await promise
-                } finally {
-                  clearTimeout(timer)
-                }
-                continue
-              }
-              for (const event of tick.events) {
-                const expectedSeq = SessionSeq(nextOffset)
-                if (event.seq < expectedSeq) continue
-                if (event.seq !== expectedSeq) {
-                  throw new RemoteError('gateway/internal', `session event stream skipped seq ${String(expectedSeq)}`, {})
-                }
-                nextOffset = SessionLogOffset(nextOffset + 1)
-                yield entryFor(event)
+        while (!follower.closed && !signal.aborted) {
+          const item = buffered.popFront()
+          if (item === undefined) {
+            const tick = await tailer.completeTick(signal)
+            if (tick === 'wait') {
+              // oxlint-disable-next-line typescript/no-unnecessary-condition -- flags can flip in another call frame while suspended
+              if (follower.closed || signal.aborted) break
+              // A fresh wake seat per wait: a seat resolved by a previous
+              // timer or notification stays resolved, and reusing it would
+              // turn every later wait into an immediate wake — a hot re-probe
+              // loop (writeLease + stat each round). Arming per wait bounds
+              // notify() and the timer to waking exactly one wait; an abort
+              // landing before this re-arm is cut here rather than paid as a
+              // one-interval timer delay.
+              const { promise, resolve } = Promise.withResolvers<void>()
+              wake = resolve
+              const timer = setTimeout(resolve, EXTERNAL_TAIL_POLL_MS)
+              try {
+                await promise
+              } finally {
+                clearTimeout(timer)
               }
               continue
             }
-            if (item.type === 'assistant-stream') {
-              if (item.ordinal > assistantStreamOrdinalCut) {
-                yield { type: 'assistant-stream', frame: item.frame }
+            for (const event of tick.events) {
+              const expectedSeq = SessionSeq(nextOffset)
+              if (event.seq < expectedSeq) continue
+              if (event.seq !== expectedSeq) {
+                throw new RemoteError('gateway/internal', `session event stream skipped seq ${String(expectedSeq)}`, {})
               }
-              continue
+              nextOffset = SessionLogOffset(nextOffset + 1)
+              yield entryFor(event)
             }
-            const expectedSeq = SessionSeq(nextOffset)
-            if (item.event.seq < expectedSeq) continue
-            if (item.event.seq !== expectedSeq) {
-              throw new RemoteError('gateway/internal', `session event stream skipped seq ${String(expectedSeq)}`, {})
-            }
-            nextOffset = SessionLogOffset(nextOffset + 1)
-            yield entryFor(item.event)
+            continue
           }
-        } finally {
-          wake = undefined
+          if (item.type === 'assistant-stream') {
+            if (item.ordinal > assistantStreamOrdinalCut) {
+              yield { type: 'assistant-stream', frame: item.frame }
+            }
+            continue
+          }
+          const expectedSeq = SessionSeq(nextOffset)
+          if (item.event.seq < expectedSeq) continue
+          if (item.event.seq !== expectedSeq) {
+            throw new RemoteError('gateway/internal', `session event stream skipped seq ${String(expectedSeq)}`, {})
+          }
+          nextOffset = SessionLogOffset(nextOffset + 1)
+          yield entryFor(item.event)
         }
       } finally {
+        wake = undefined
         tailer.dispose()
       }
     } finally {
@@ -335,7 +338,7 @@ function cursorBeforeNext(nextSeq: SessionLogOffsetType): SessionSeqCursor {
 }
 
 /** Poll interval for one external writer's durable log tail. */
-const EXTERNAL_TAIL_POLL_MS = 1500
+export const EXTERNAL_TAIL_POLL_MS = 1500
 
 /** How a tail tick hands control back to the follow loop after observing storage. */
 type TailTick = 'wait' | { readonly kind: 'events'; readonly events: readonly SessionEvent[] }
