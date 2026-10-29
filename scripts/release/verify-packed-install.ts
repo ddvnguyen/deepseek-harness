@@ -28,6 +28,18 @@ import { packedIdentity } from './tarball.ts'
 import { verifyInstalledProductIsolation } from './installed-product-isolation.ts'
 
 /**
+ * Version overrides the packed-install consumer pins regardless of what the
+ * tarball trees request. npm resolves transitive ranges live, and a registry
+ * can advertise a version whose tarball is gone (observed 2026-10-29:
+ * `@types/estree`@1.0.10 listed as `latest` while its tarball 404s, which
+ * broke `rollup`@4.62.2's resolution inside the packed install). Every pinned
+ * version here must exist on the registry.
+ */
+const CONSUMER_OVERRIDES: Record<string, string> = {
+  '@types/estree': '1.0.9',
+}
+
+/**
  * Environment for the installed artifact: no host Node hooks, no host DeepSeek
  * Harness home, and no ambient npm user agent that would confuse npm.
  * @param consumerRoot - the throwaway consumer directory.
@@ -97,6 +109,7 @@ function main(): void {
       version: '0.0.0',
       private: true,
       dependencies: Object.fromEntries([...packed].map(([name, entryPacked]) => [name, entryPacked.url])),
+      overrides: CONSUMER_OVERRIDES,
     }, null, 2)}\n`)
 
     const environment = consumerEnvironment(consumerRoot)
