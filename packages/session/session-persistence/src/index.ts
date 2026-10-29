@@ -62,8 +62,8 @@ export interface SessionPersistenceWriteLeaseOptions {
   /** Optional cancellation for backend metadata reads. */
   readonly signal?: AbortSignal
 }
-
-/** Lightweight stored-session observation returned by {@link SessionPersistence.stat}
+/**
+ * Lightweight stored-session observation returned by {@link SessionPersistence.stat}
  * and {@link SessionPersistence.list} without reading the full event log.
  */
 export interface SessionPersistenceSnapshot {
@@ -83,6 +83,13 @@ export interface SessionPersistenceSnapshot {
    * materialized per-Session file, including an unmaterialized pending Session.
    */
   readonly location?: SessionLocation
+   * The session's write-lease probe ({@link SessionExternalWriterProbe}), when
+   * the backend can derive it from the artifact it just resolved without an
+   * extra id-resolution pass; absent otherwise, including routinely on
+   * unmaterialized sessions. Cheap listings read external liveness from here
+   * instead of one {@link SessionPersistence.writeLease} resolution per row.
+   */
+  readonly lease?: SessionExternalWriterProbe
 }
 
 /** Options for {@link SessionPersistence.create}. */
@@ -226,14 +233,6 @@ export abstract class SessionPersistence extends Service {
    * @returns one snapshot per stored session.
    */
   abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
-
-  /**
-   * Whether this backend {@link writeLease|probes} anything: the default
-   * implementation answers `undefined` without I/O, so a listing that would
-   * pay one await per cold row probes only backends that actually implement
-   * the lease probe.
-   */
-  readonly probesWriteLease: boolean = false
 
   /**
    * Probe whether an external process plausibly still holds this session's

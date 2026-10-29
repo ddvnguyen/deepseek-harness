@@ -3,7 +3,7 @@
 import { interruptedTurnClosers } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset, SessionSeedEventState } from '@deepseek-ai/dsh-session'
 import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
-import type { SessionHandleReadResult } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionExternalWriterProbe, SessionHandleReadResult } from '@deepseek-ai/dsh-session-persistence'
 
 /** A stored session log balanced for read-only viewing. */
 export interface ColdSessionLog {
@@ -58,7 +58,16 @@ export async function readColdSessionLog(
   }
   await handle.close()
   const { events } = read
-  const writer = await persistence.writeLease(sessionId, options)
+  // A throwaway probe failure leaves liveness unanswerable, not settled: the
+  // call falls back to today's balanced read rather than discarding the log
+  // the open handle already served.
+  let writer: SessionExternalWriterProbe | undefined
+  try {
+    writer = await persistence.writeLease(sessionId, options)
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === 'AbortError') throw error
+    writer = undefined
+  }
   const liveWriter = writer?.running === true
   return {
     eventState: read.eventState,

@@ -118,11 +118,13 @@ export class SessionObservationReader {
       const attachedDuringStat = this.ctx.sessions.get(sessionId)
       if (attachedDuringStat !== undefined) return this.live(attachedDuringStat, projectionMode)
       let entry = this.cachedEntry(persistence.identity, sessionId, snapshot.revision)
-      if (entry !== undefined && entry.liveWriter && !(await this.writerStillLive(persistence, sessionId, signal))) {
+      if (entry !== undefined && entry.liveWriter
+        && (await this.writerStillLive(persistence, sessionId, signal)) === false) {
         // The cached seed was read while a live external writer held the
         // lease, so it kept its open final turn unbalanced. The revision
-        // cannot expire it (a settled writer appends nothing more); probe
-        // before reuse, and reload once through the fresh read.
+        // cannot expire it (a settled writer appends nothing more), so only
+        // a PROVEN settled probe reloads; a failed or unknown probe keeps
+        // the prior assumption (see writerStillLive).
         entry = undefined
       }
       if (entry === undefined) {
