@@ -27,13 +27,15 @@ import {
   assertStoredId, materializeCreateHeader, sessionFormatVersionRefusal, validateStoredEvents,
   type SessionAccess, type SessionHandle,
   type SessionHandleReadResult,
+  type SessionExternalWriterProbe,
   type SessionLocation, type SessionPersistenceCreateOptions,
   type SessionPersistenceListOptions, type SessionPersistenceOpenOptions,
   type SessionPersistenceSnapshot, type SessionPersistenceStatOptions,
+  type SessionPersistenceWriteLeaseOptions,
   type SessionPersistenceRevision as PersistenceRevision,
 } from '@deepseek-ai/dsh-session-persistence'
 import { JsonlBackendTracker, JsonlSessionHandle, type StorageHandleState } from './storage.ts'
-import { SessionWriteLease } from './lease.ts'
+import { SessionWriteLease, externalWriterLeaseProbe } from './lease.ts'
 import { SESSION_FORMAT_VERSION, SessionId as makeSessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId, SessionHeader, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import {
@@ -291,6 +293,9 @@ function waitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<
 class JsonlSessionPersistence extends SessionPersistence {
   /** Backend label for diagnostics and effects; shadows `Service.name` without changing the service key. */
   override readonly name = 'session-persistence-jsonl'
+
+  /** This backend reads durable holder records, so cold-row listing probes it. */
+  override readonly probesWriteLease = true
 
   private root: string
   private compression: JsonlCompression
@@ -559,6 +564,31 @@ class JsonlSessionPersistence extends SessionPersistence {
     }
     signal?.throwIfAborted()
     return snapshots
+  }
+
+  /**
+   * Probe the session's cross-process write lease from its durable holder
+   * record; see the seam contract and `lease.ts` for the decision order. A
+   * this-process pending (created-but-unmaterialized) session has no lock
+   * file yet, so it reports `undefined` exactly like a foreign reader does.
+   * @param id - the stored session to probe.
+   * @param options - optional cancellation.
+   * @returns the live external-writer probe, or `undefined` when no live
+   *   external writer is proven (including on Windows, where the lease has
+   *   no file).
+   */
+  override async writeLease(
+    id: SessionId,
+    options?: SessionPersistenceWriteLeaseOptions,
+  ): Promise<SessionExternalWriterProbe | undefined> {
+    options?.signal?.throwIfAborted()
+    await this.ensureRootEncoding()
+    options?.signal?.throwIfAborted()
+    if (this.tracker.pendingOf(id) !== undefined) return undefined
+    const selected = await this.findLog(id, options?.signal)
+    if (selected === undefined) return undefined
+    options?.signal?.throwIfAborted()
+    return externalWriterLeaseProbe(dirname(selected.currentPath))
   }
 
   // --- handle-facing storage internals (package-private via the handle class below) ---

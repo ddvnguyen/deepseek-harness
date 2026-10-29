@@ -72,7 +72,8 @@ export interface CreateAgentOptions {
    * `cwd`/`parentSession`/`isSeeded`/`origin`/`delegationDepth` fields of
    * {@link CreateSessionOptions.meta} in dsh-session (the internal-only
    * `createdAt`, used when reconstructing a persisted session, is deliberately
-   * excluded — a factory caller never sets it). This is durable session data,
+   * excluded — a factory caller never sets it), plus the additive
+   * `externalOwner` label. This is durable session data,
    * so the session boundary validates and snapshots it before asynchronous
    * setup begins.
    */
@@ -83,6 +84,7 @@ export interface CreateAgentOptions {
     readonly origin?: 'subagent'
     readonly delegationDepth?: number
     readonly agentPreset?: string
+    readonly externalOwner?: string
   }
   /** Exact fork-inherited prefix length when the session metadata sets `isSeeded`. */
   readonly inheritedEventCount?: SessionLogOffset

@@ -295,6 +295,20 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const inputHub = new InputHub(ctx, t)
   const composerBlocks = new ComposerBlockRegistry()
 
+  // An externally owned Session (an external run bridge's writer) is
+  // read-only while that writer is live: the block is raised here from the
+  // Host's status frames and cleared the moment the lease probe proves the
+  // writer gone. Agent-driven transitions arrive with `owner === undefined`
+  // and never touch this block.
+  ctx.effect(() => ctx.remote.$on('api-session/status', (sessionId, running, owner) => {
+    if (owner === undefined) return
+    composerBlocks.set(sessionId, !running ? undefined : {
+      reason: owner === '' || owner === null
+        ? t('placeholder.externalOwned')
+        : t('placeholder.ownedBy', { owner }),
+    })
+  }), 'ui-conversation: external composer blocks')
+
   ctx.inject(['commandUi'], (scope) => {
     const commands = scope.get('commandUi') as FileCommandRegistry
     scope.effect(() => commands.register({

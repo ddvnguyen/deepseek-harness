@@ -9,6 +9,7 @@ import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-
 import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionRecord, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
+import type { SessionExternalWriterProbe } from '@deepseek-ai/dsh-session-persistence'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { z } from 'zod'
 import {
@@ -150,9 +151,29 @@ export class ApiSessionList {
         yieldDeadline = performance.now() + this.workSliceMs
       }
     }
+    // Lease probes (only when the backend implements them) run before the
+    // sync summaries, so a probe-less backend keeps its cheap rows in one
+    // synchronous slice; a probing backend pays one await per row.
+    const leases = new Map<SessionId, SessionExternalWriterProbe | undefined>()
+    const persistence = this.ctx.get('sessionPersistence')
+    if (persistence?.probesWriteLease === true) {
+      for (const record of cold) {
+        signal?.throwIfAborted()
+        try {
+          leases.set(record.header.id, await persistence.writeLease(record.header.id))
+        } catch (error: unknown) {
+          // An unreadable or unserviceable lease proves nothing; today's
+          // not-running row is the safe default.
+          this.ctx.logger.warn(
+            `session list "${record.header.id}" lease probe failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+          leases.set(record.header.id, undefined)
+        }
+      }
+    }
     for (const record of cold) {
       signal?.throwIfAborted()
-      items.push(this.summarizeCold(record))
+      items.push(this.summarizeCold(record, leases.get(record.header.id)))
       if (performance.now() >= yieldDeadline) {
         await scheduler.yield()
         signal?.throwIfAborted()
@@ -164,7 +185,15 @@ export class ApiSessionList {
     return items
   }
 
-  private summarizeCold({ header, formatStatus }: SessionRecord): SessionSummary {
+  /**
+   * Build one cold-persisted Session summary. The lease probe result settles
+   * the `running` bit: a live external writer keeps a cold row running even
+   * though this process never hosted its Agent.
+   */
+  private summarizeCold(
+    { header, formatStatus }: SessionRecord,
+    writer: SessionExternalWriterProbe | undefined,
+  ): SessionSummary {
     const projections = this.projectionsFor(header, undefined)
     const metadata = projections?.values.sessionListMetadata
     return {
@@ -172,7 +201,7 @@ export class ApiSessionList {
       updatedAt: updatedAt(header, metadata),
       agentAvailable: false,
       ...(formatStatus === undefined ? {} : { formatStatus }),
-      running: false,
+      running: writer?.running === true,
       // A large, metadata-less, or inaccessible cache miss remains unknown and visible.
       blank: metadata?.blank ?? false,
       ...listFields(header),
@@ -354,10 +383,12 @@ function listFields(header: SessionHeader): {
   readonly parentSessionId?: SessionId
   readonly origin?: 'subagent'
   readonly cwd?: string
+  readonly externalOwner?: string
 } {
   return {
     ...(header.parentSession === undefined ? {} : { parentSessionId: header.parentSession }),
     ...(header.origin === undefined ? {} : { origin: header.origin }),
     ...(header.cwd === undefined ? {} : { cwd: header.cwd }),
+    ...(header.externalOwner === undefined ? {} : { externalOwner: header.externalOwner }),
   }
 }

@@ -60,6 +60,10 @@ The backend owns the live write path: it installs the session listeners once and
 
 Persistence returns the physically valid log; semantic repair belongs to the reader. A session that crashed mid-turn keeps its open final turn — a single turn can be large, and those events were durably appended before the crash; only the incomplete fragment of a never-acknowledged torn tail is discarded — complete records recovered from it are durably rewritten by the write path before the handle's first new append. Resume (agent-loop) reads the stored log through its write handle, computes `interruptedTurnClosers` — synthetic `tool/result` errors, any open `step/end`, and `turn/end {interrupted}` — and appends them through the same handle as an ordinary batch. Read-only observers (session-query) balance an interrupted cold log with the same closers in memory only.
 
+### External writers
+
+A stored session can be written by another process (an external run bridge) while this process only reads it. `writeLease(id)` probes that liveness best-effort from the write lease: a durable holder record names a holder pid (plus an optional opaque owner label recorded from the writer's `DSH_SESSION_OWNER` environment), a proven-dead pid (or the release marker a clean close writes) settles "not running", and a record-less fresh lock file rides a bounded mtime grace. Readers use the probe to distinguish an actively written session from a crashed one: a live external writer keeps an open final turn open (session-query suppresses its balancing closers), and consumers may present the session as read-only while the lease is held. The probe proves liveness, never exit: a wedged holder reads as running, and pid reuse can read as running for one lease generation.
+
 ### Failures and recovery
 
 For versioned artifacts, `stat` and `list` expose `formatStatus` as `current` or `migration-required`. The separate `header` remains current logical metadata. This status describes storage, not an in-memory preparation or migration task; providers without this information omit it.

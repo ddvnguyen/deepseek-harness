@@ -1230,16 +1230,20 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `api-session/status` — emit
 
-One Agent changed running state.
+One Agent changed running state, or (with an external owner label) an externally owned stored Session's write lease gained or lost its live holder.
 
 ```ts cordis-catalog
 /**
- * One Agent changed running state.
+ * One Agent changed running state, or (with an external owner label)
+ * an externally owned stored Session's write lease gained or lost its
+ * live holder.
  * @mode emit
  * @param sessionId - Agent and Session identity.
  * @param running - whether the Agent is running.
+ * @param owner - for an external-writer transition: the holder's opaque
+ *   label, or null when none was recorded; undefined for an Agent transition.
  */
-'api-session/status'(sessionId: SessionId, running: boolean): void
+'api-session/status'(sessionId: SessionId, running: boolean, owner?: string | null): void
 ```
 
 Types: [SessionId](core.zh.md)

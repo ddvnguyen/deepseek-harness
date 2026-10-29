@@ -410,6 +410,29 @@ abstract stat(id: SessionId, options?: SessionPersistenceStatOptions): Promise<S
  * @returns one snapshot per stored session.
  */
 abstract list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]>
+
+/**
+ * Probe whether an external process plausibly still holds this session's
+ * cross-process write lease. Backends that can answer (a kernel lock with a
+ * durable holder record) report liveness from the holder's pid when one is
+ * recorded, and from a bounded lock-file mtime grace when the record is
+ * missing or torn; a released or never-acquired lease reports `undefined`.
+ * Backends that cannot distinguish external holders return `undefined`,
+ * which means "no live external writer" for every consumer: the same
+ * read-only assumption every read has always made.
+ *
+ * The probe is best-effort by design: it never wakes, waits for, or
+ * expropriates a holder, and a live-but-recordless holder can read as
+ * stopped after the grace window. Readers use it to distinguish an active
+ * external writer from a crashed one; it is never proof of exit.
+ * @param id - the stored session to probe.
+ * @param options - optional cancellation.
+ * @returns the live external-writer probe, or `undefined` when no live
+ *   external writer is proven.
+ * @throws backend failures that make liveness unanswerable, minus routine
+ *   I/O refusals which report `undefined` (an unreadable lease proves nothing).
+ */
+writeLease( id: SessionId, options?: SessionPersistenceWriteLeaseOptions, ): Promise<SessionExternalWriterProbe | undefined>
 ```
 
 Types: [SessionId](core.zh.md)

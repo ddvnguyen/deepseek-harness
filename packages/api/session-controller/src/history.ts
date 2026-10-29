@@ -15,7 +15,11 @@ import type {
   SessionLogOffset as SessionLogOffsetType,
   SessionSeqCursor,
 } from '@deepseek-ai/dsh-session'
-import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
+import { SessionQueryError, readColdSessionLog, type SessionObservation } from '@deepseek-ai/dsh-session-query'
+import type {
+  SessionExternalWriterProbe,
+  SessionPersistenceRevision,
+} from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -211,25 +215,62 @@ export class SessionHistoryController {
         }
       }
       let nextOffset = SessionLogOffset(cursor + 1)
-      while (!follower.closed && !signal.aborted) {
-        const item = buffered.popFront()
-        if (item === undefined) {
-          await new Promise<void>((resolve) => { wake = resolve })
-          continue
-        }
-        if (item.type === 'assistant-stream') {
-          if (item.ordinal > assistantStreamOrdinalCut) {
-            yield { type: 'assistant-stream', frame: item.frame }
+      const tailer = new ExternalEventTailer(
+        this.ctx,
+        target,
+        source.revision,
+        tailSignal => this.readPersistedEvents(address, tailSignal),
+      )
+      try {
+        // The wake seat is armed across the tail tick as well: an abort (or
+        // any notification) landing during the observation has settled the
+        // seat by the time the loop reaches its own await.
+        const { promise, resolve } = Promise.withResolvers<void>()
+        wake = resolve
+        try {
+          while (!follower.closed && !signal.aborted) {
+            const item = buffered.popFront()
+            if (item === undefined) {
+              const tick = await tailer.completeTick(signal)
+              if (tick === 'wait') {
+                const timer = setTimeout(resolve, EXTERNAL_TAIL_POLL_MS)
+                try {
+                  await promise
+                } finally {
+                  clearTimeout(timer)
+                }
+                continue
+              }
+              for (const event of tick.events) {
+                const expectedSeq = SessionSeq(nextOffset)
+                if (event.seq < expectedSeq) continue
+                if (event.seq !== expectedSeq) {
+                  throw new RemoteError('gateway/internal', `session event stream skipped seq ${String(expectedSeq)}`, {})
+                }
+                nextOffset = SessionLogOffset(nextOffset + 1)
+                yield entryFor(event)
+              }
+              continue
+            }
+            if (item.type === 'assistant-stream') {
+              if (item.ordinal > assistantStreamOrdinalCut) {
+                yield { type: 'assistant-stream', frame: item.frame }
+              }
+              continue
+            }
+            const expectedSeq = SessionSeq(nextOffset)
+            if (item.event.seq < expectedSeq) continue
+            if (item.event.seq !== expectedSeq) {
+              throw new RemoteError('gateway/internal', `session event stream skipped seq ${String(expectedSeq)}`, {})
+            }
+            nextOffset = SessionLogOffset(nextOffset + 1)
+            yield entryFor(item.event)
           }
-          continue
+        } finally {
+          wake = undefined
         }
-        const expectedSeq = SessionSeq(nextOffset)
-        if (item.event.seq < expectedSeq) continue
-        if (item.event.seq !== expectedSeq) {
-          throw new RemoteError('gateway/internal', `session event stream skipped seq ${String(expectedSeq)}`, {})
-        }
-        nextOffset = SessionLogOffset(nextOffset + 1)
-        yield entryFor(item.event)
+      } finally {
+        tailer.dispose()
       }
     } finally {
       this.closeFollowers.delete(close)
@@ -238,6 +279,19 @@ export class SessionHistoryController {
       disposeEvent()
       disposeAssistantStream?.()
     }
+  }
+
+  /** Re-observe one persisted cut for the external tail: the probe-gated balanced events. */
+  private async readPersistedEvents(
+    address: SessionAddress,
+    signal: AbortSignal,
+  ): Promise<readonly SessionEvent[]> {
+    const persistence = this.ctx.get('sessionPersistence')
+    if (persistence === undefined) rejectNotFound(address)
+    // Bypass the observation cache: its live-writer entries are only
+    // probe-revalidated on reader reuse, and the tail needs the probe's own
+    // state at this instant.
+    return (await readColdSessionLog(persistence, addressId(address), signal)).events
   }
 
   private async sourceFor(
@@ -278,6 +332,91 @@ export class SessionHistoryController {
 
 function cursorBeforeNext(nextSeq: SessionLogOffsetType): SessionSeqCursor {
   return nextSeq === 0 ? -1 : SessionSeq(nextSeq - 1)
+}
+
+/** Poll interval for one external writer's durable log tail. */
+const EXTERNAL_TAIL_POLL_MS = 1500
+
+/** How a tail tick hands control back to the follow loop after observing storage. */
+type TailTick = 'wait' | { readonly kind: 'events'; readonly events: readonly SessionEvent[] }
+
+/**
+ * Tails a stored session's durable log on behalf of one open follow stream
+ * while an external process holds its write lease: the poller compares the
+ * persistence stat revision (the JSONL backend's stat-derived change token)
+ * against the opening observation's, re-observes the complete probe-gated
+ * balanced log when the revision moves or the lease probe settles a death,
+ * and reports each liveness transition through `api-session/status` so the
+ * browser relays the external running bit like an in-process agent's.
+ * In-process sessions never enter this path (the stream's own agent delivers
+ * through `session/event`); the tick also yields `wait` there, so a session
+ * can switch ownership mid-stream without double delivery.
+ */
+class ExternalEventTailer {
+  private lastRevision: SessionPersistenceRevision | undefined
+  private wasRunning = false
+  private done = false
+
+  constructor(
+    private readonly ctx: Context,
+    private readonly sessionId: SessionId,
+    initialRevision: SessionPersistenceRevision | undefined,
+    private readonly readEvents: (signal: AbortSignal) => Promise<readonly SessionEvent[]>,
+  ) {
+    this.lastRevision = initialRevision
+  }
+
+  dispose(): void {
+    this.done = true
+  }
+
+  /**
+   * Observe storage once and hand back the next events the follow stream
+   * must deliver, or `wait` when it should sleep on its notification queue.
+   * @param signal - the follow stream's cancellation.
+   * @returns the tick outcome.
+   */
+  async completeTick(signal: AbortSignal): Promise<TailTick> {
+    // A same-process adopter now owns the session: its own writes publish
+    // through `session/event`, so the durable tail must stay silent.
+    if (this.ctx.sessions.get(this.sessionId) !== undefined) return 'wait'
+    const persistence = this.ctx.get('sessionPersistence')
+    if (persistence === undefined) return 'wait'
+    let probe: SessionExternalWriterProbe | undefined
+    let revision: SessionPersistenceRevision | undefined
+    try {
+      probe = await persistence.writeLease(this.sessionId, { signal })
+      const snapshot = await persistence.stat(this.sessionId, { signal })
+      revision = snapshot?.revision
+    } catch (error: unknown) {
+      // An abort arrives exactly once and settles the stream through the
+      // loop condition; any other refusal is a transient tick that the next
+      // interval retries (fail-safe "wait" over a diagnostic surface).
+      if (error instanceof Error && error.name !== 'AbortError' && !signal.aborted) {
+        this.ctx.logger.warn(
+          `session follow tail "${this.sessionId}" probe failed: ${error.message}`,
+        )
+      }
+      return 'wait'
+    }
+    if (this.done) return 'wait'
+    // No throwIfAborted here: an abort that lands between awaits settles the
+    // loop's wake seat, and the loop condition finishes the stream cleanly.
+    const running = probe?.running === true
+    const transitioned = running !== this.wasRunning
+    if (transitioned) {
+      this.ctx.emit('api-session/status', this.sessionId, running, probe?.owner ?? null)
+      this.wasRunning = running
+    }
+    // Re-observe when the log moved, or once when a live writer settles a
+    // death (the probe-gated read then carries the interrupted-turn closers).
+    // A steady live writer or an already-settled death only probes.
+    if (transitioned || revision !== this.lastRevision) {
+      this.lastRevision = revision
+      return { kind: 'events', events: await this.readEvents(signal) }
+    }
+    return 'wait'
+  }
 }
 
 function wireAssistantStreamFrame(

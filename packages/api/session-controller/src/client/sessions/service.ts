@@ -34,6 +34,8 @@ export interface SessionSummary {
   parentId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent'
+  /** Opaque external-producer label stamped at create; absent for sessions owned by this process. */
+  externalOwner?: string
   /** Format classification supplied by the Host list, when available. */
   formatStatus?: SessionListEntry['formatStatus']
   /** Host running state for `ids` members; a display fallback for other rows. */
@@ -403,6 +405,10 @@ export class ClientSessions implements ISessions {
     this.manager.handleSessionStatus(...args)
   }
 
+  handleExternalWriterStatus(...args: Parameters<SessionManager['handleExternalWriterStatus']>): void {
+    this.manager.handleExternalWriterStatus(...args)
+  }
+
   /**
    * Apply one remotely forwarded list-activity change.
    * @param args - Session identity and durable activity timestamp.
@@ -640,6 +646,7 @@ export class ClientSessions implements ISessions {
         ...(entry.cwd !== undefined ? { cwd: entry.cwd } : {}),
         ...(entry.parentSessionId !== undefined ? { parentId: entry.parentSessionId } : {}),
         ...(entry.origin !== undefined ? { origin: entry.origin } : {}),
+        ...(entry.externalOwner !== undefined ? { externalOwner: entry.externalOwner } : {}),
       }
     }
     for (const [parentId, projection] of Object.entries(projectionsBySession)) {
