@@ -250,16 +250,17 @@ describe('ui-settings-general apply', () => {
     await vi.waitFor(() => { expect(c.mock.log.calls('settings/describe')).toHaveLength(3) })
   })
 
-  it('keeps Host preferences off-loopback and withholds only the native document action', async ({ mock, start }) => {
+  it('applies Host preferences and keeps the document action available off-loopback', async ({ mock, start }) => {
     const loopbackUrl = location.href
     setPageUrl('http://198.51.100.7:3000/')
     onTestFinished(() => { setPageUrl(loopbackUrl) })
     const { c, settings } = await client(mock, start)
     expect(c.connection.isLoopback).toBe(false)
-    // The stored Host locale applies off-loopback; only the native document
-    // action stays loopback-only.
+    // Fork (LAN-exposed single-operator web deployment): the stored Host
+    // locale applies off-loopback and the document action registers — the
+    // Host trust fence (trusted-host flags) stays the server-side gate.
     expect(c.ctx.locale.getSnapshot().active).toBe('zh')
-    expect(ownEntries(c, 'settings.action')).toEqual([])
+    expect(ownEntries(c, 'settings.action')).toHaveLength(1)
     const english = localeView('en', 1)
     settings.mutate.mockResolvedValueOnce(ok(english))
     c.ctx.locale.setLocale('en')
