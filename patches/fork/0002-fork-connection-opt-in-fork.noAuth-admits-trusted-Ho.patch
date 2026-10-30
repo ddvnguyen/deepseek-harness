@@ -10,7 +10,6 @@ is admitted as the shared browser peer. Intended for a deployment behind an
 external perimeter (Cloudflare Access); PROD never sets it.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-(cherry picked from commit 6f703c09eebd3742b86d36436746a4e064a440aa)
 ---
  docs/config-catalog.md                        | 21 ++++++++
  docs/config-catalog.zh.md                     | 21 ++++++++

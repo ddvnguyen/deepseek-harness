@@ -11,7 +11,6 @@ can name `fork.allowWildcardHost: true` on the `web-startup` row; the bundle
 passes it on to the `webserver` row, and the Host fence is untouched.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
-(cherry picked from commit d31bd0c86d312ef9295aa4973f121d088adb2f01)
 ---
  docs/config-catalog.md                        | 20 ++++++++++
  docs/config-catalog.zh.md                     | 20 ++++++++++
