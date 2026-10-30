@@ -13,4 +13,7 @@ docs/persistence-schema.json linguist-generated=true
 docs/persistence-changes/*.schema.json linguist-generated=true
 docs/persistence-changes/releases/*.schema.json linguist-generated=true
 docs/persistence-changes/historical-formats/*.schema.json linguist-generated=true
+
+# Unified patch blank context lines require their leading space.
+patches/*.patch whitespace=-blank-at-eol
 patches/fork/*.patch whitespace=-trailing-space,-blank-at-eof,-space-before-tab
