@@ -138,7 +138,7 @@ describe('CI workflow', () => {
       expect(job.steps).toContainEqual(expect.objectContaining({ run: command }))
     }
     for (const [file, command] of [
-      ['release-publish.yml', 'pnpm run build:official'],
+      ['release-publish.yml', 'pnpm run build:official --serial'],
       ['release-vendor-publish.yml', 'pnpm run build:lib:host'],
     ] as const) {
       expect(workflowJob(loadWorkflow('.github/workflows/' + file), 'pack').steps)
