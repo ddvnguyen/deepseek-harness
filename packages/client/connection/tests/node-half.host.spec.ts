@@ -1003,6 +1003,13 @@ describe('connection node half: fork.noAuth (dsh#02)', () => {
     expect(index.state.status).toBe(403)
     expect(index.state.headers?.['set-cookie']).toBeUndefined()
     expect(connection.admit(fakeRequest({ host: 'evil.example' }))).toEqual({ rejection: 403 })
+    // A HEAD probe of the untrusted index gets the same refusal without a body.
+    const head = fakeResponse()
+    const headRequest = fakeRequest({ host: 'evil.example' }, '/')
+    Object.assign(headRequest, { method: 'HEAD' })
+    expect(connection.authorizeIndex(headRequest, head.response)).toBe(false)
+    expect(head.state.status).toBe(403)
+    expect(head.state.body).toBeUndefined()
     // The cross-site fence applies as well: a trusted Host with a cross-site
     // marker or a foreign Origin is not admitted.
     expect(connection.admit(fakeRequest({ host: 'harness.example', 'sec-fetch-site': 'cross-site' })))

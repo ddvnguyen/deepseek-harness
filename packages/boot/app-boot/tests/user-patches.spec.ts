@@ -372,6 +372,19 @@ describe('profile reconciliation settlement', () => {
     await expect(reconcileProfilePatches(ctx, [], NAME)).resolves.toEqual([])
   })
 
+  it('refuses a Loader entry with the pinned root id that is not an Include', async () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'noop.mjs'), 'export function apply() {}\n')
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    ctx.baseUrl = pathToFileURL(dir).href + '/'
+    await ctx.plugin(Loader)
+    const impostor = { id: 'include', name: './noop.mjs' }
+    await ctx.loader.create(impostor)
+    await ctx.loader.await()
+    await expect(reconcileProfilePatches(ctx, [], NAME)).rejects.toThrow('profile reload requires the root Include entry')
+  })
+
   it('removes a previously failed entry without reporting its old activation error', async () => {
     const dir = tmp()
     writeFileSync(join(dir, 'cordis.yml'), '[]\n')
