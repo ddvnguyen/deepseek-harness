@@ -22,10 +22,10 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
  8 files changed, 167 insertions(+), 5 deletions(-)
 
 diff --git a/docs/config-catalog.md b/docs/config-catalog.md
-index ce7d3715d5..54d7fa3daa 100644
+index 978e02a48e..aea779f5e1 100644
 --- a/docs/config-catalog.md
 +++ b/docs/config-catalog.md
-@@ -453,6 +453,11 @@ export interface ConnectionConfig {
+@@ -476,6 +476,11 @@ export interface ConnectionConfig {
    cookieMaxAgeDays?: number
    /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
    maxRequestBodyBytes?: number
@@ -37,7 +37,7 @@ index ce7d3715d5..54d7fa3daa 100644
  }
  
  /** Timing for generation readiness and automatic reconnection. */
-@@ -471,6 +476,22 @@ export interface ConnectionRecoveryConfig {
+@@ -494,6 +499,22 @@ export interface ConnectionRecoveryConfig {
    /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
    generationReadyTimeoutMs?: number
  }
@@ -61,10 +61,10 @@ index ce7d3715d5..54d7fa3daa 100644
  <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-connection -->
  
 diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
-index a84c227e08..201057368f 100644
+index e64a885032..1765234d40 100644
 --- a/docs/config-catalog.zh.md
 +++ b/docs/config-catalog.zh.md
-@@ -455,6 +455,11 @@ export interface ConnectionConfig {
+@@ -478,6 +478,11 @@ export interface ConnectionConfig {
    cookieMaxAgeDays?: number
    /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
    maxRequestBodyBytes?: number
@@ -76,7 +76,7 @@ index a84c227e08..201057368f 100644
  }
  
  /** Timing for generation readiness and automatic reconnection. */
-@@ -473,6 +478,22 @@ export interface ConnectionRecoveryConfig {
+@@ -496,6 +501,22 @@ export interface ConnectionRecoveryConfig {
    /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
    generationReadyTimeoutMs?: number
  }
@@ -289,10 +289,10 @@ index 88e7b48baa..68483e5681 100644
    }
  
 diff --git a/packages/client/connection/tests/node-half.host.spec.ts b/packages/client/connection/tests/node-half.host.spec.ts
-index b3793c9cfd..8ab842ab29 100644
+index 8be225209f..f449ba0434 100644
 --- a/packages/client/connection/tests/node-half.host.spec.ts
 +++ b/packages/client/connection/tests/node-half.host.spec.ts
-@@ -959,3 +959,53 @@ describe('connection node half over a real HTTP server', () => {
+@@ -962,3 +962,53 @@ describe('connection node half over a real HTTP server', () => {
      }
    })
  })

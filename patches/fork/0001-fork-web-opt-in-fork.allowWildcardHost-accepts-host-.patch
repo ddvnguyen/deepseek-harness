@@ -28,10 +28,10 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
  13 files changed, 229 insertions(+), 18 deletions(-)
 
 diff --git a/docs/config-catalog.md b/docs/config-catalog.md
-index 5240eec77a..ce7d3715d5 100644
+index 9b409c6b55..978e02a48e 100644
 --- a/docs/config-catalog.md
 +++ b/docs/config-catalog.md
-@@ -1679,6 +1679,11 @@ export interface Config {
+@@ -1872,6 +1872,11 @@ export interface Config {
    compressionLevel?: number
    /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
    compressionThresholdBytes?: number
@@ -43,7 +43,7 @@ index 5240eec77a..ce7d3715d5 100644
  }
  
  /**
-@@ -1692,6 +1697,21 @@ export interface TlsConfig {
+@@ -1885,6 +1890,21 @@ export interface TlsConfig {
    /** Private key file for the chain's leaf certificate; unencrypted PEM. */
    keyFile: string
  }
@@ -66,10 +66,10 @@ index 5240eec77a..ce7d3715d5 100644
  <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
  
 diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
-index bf66626c51..a84c227e08 100644
+index 25094e00e3..e64a885032 100644
 --- a/docs/config-catalog.zh.md
 +++ b/docs/config-catalog.zh.md
-@@ -1681,6 +1681,11 @@ export interface Config {
+@@ -1874,6 +1874,11 @@ export interface Config {
    compressionLevel?: number
    /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
    compressionThresholdBytes?: number
@@ -81,7 +81,7 @@ index bf66626c51..a84c227e08 100644
  }
  
  /**
-@@ -1694,6 +1699,21 @@ export interface TlsConfig {
+@@ -1887,6 +1892,21 @@ export interface TlsConfig {
    /** Private key file for the chain's leaf certificate; unencrypted PEM. */
    keyFile: string
  }
@@ -104,7 +104,7 @@ index bf66626c51..a84c227e08 100644
  <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
  
 diff --git a/packages/bundle/web-app/README.i18n.yaml b/packages/bundle/web-app/README.i18n.yaml
-index 1d8e07a01e..a4583f5385 100644
+index ac78994ab7..c6820348ae 100644
 --- a/packages/bundle/web-app/README.i18n.yaml
 +++ b/packages/bundle/web-app/README.i18n.yaml
 @@ -12,8 +12,8 @@
@@ -133,7 +133,7 @@ index 1d8e07a01e..a4583f5385 100644
    en: 635c1336e2f4e821
    zh: caabdecb02e2df14
 diff --git a/packages/bundle/web-app/README.md b/packages/bundle/web-app/README.md
-index 2305d402cd..9a0cd6849d 100644
+index cb974443e5..eedd1e7e1f 100644
 --- a/packages/bundle/web-app/README.md
 +++ b/packages/bundle/web-app/README.md
 @@ -21,6 +21,7 @@ Run `dsh --profile web` for browser chat, model and settings management, and ses
@@ -164,7 +164,7 @@ index 2305d402cd..9a0cd6849d 100644
  
  <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/bundle/web-app/README.zh.md b/packages/bundle/web-app/README.zh.md
-index 8d08ede8af..fbee5a8207 100644
+index 88bbae54a5..b9b44cce2c 100644
 --- a/packages/bundle/web-app/README.zh.md
 +++ b/packages/bundle/web-app/README.zh.md
 @@ -21,6 +21,7 @@ kind: "package-bundle"
@@ -195,10 +195,10 @@ index 8d08ede8af..fbee5a8207 100644
  
  <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index a1ca0b5483..689cbebfd6 100644
+index c0ae7077d9..f0882b4145 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
-@@ -175,7 +175,8 @@
+@@ -167,7 +167,8 @@
      # by the web-runtime row below through the fallback seat. Routing and
      # browser-facing asset paths do not depend on the advertised URL, which the
      # web-runtime row owns; Connection reads trust authorities from webStartup.
@@ -208,7 +208,7 @@ index a1ca0b5483..689cbebfd6 100644
      - id: webserver
        name: '@deepseek-ai/dsh-host-webserver'
        inject: [webStartup]
-@@ -183,6 +184,10 @@
+@@ -175,6 +176,10 @@
          host: !!js ctx.webStartup.host ?? '127.0.0.1'
          port: !!js ctx.webStartup.port ?? 3080
          tls: !!js ctx.webStartup.tls
@@ -356,12 +356,12 @@ index 9a7a01a5cb..339d768092 100644
      const { values, observed } = await bootProvider([])
      expect(values).toEqual({ openBrowser: true, trustedHosts: [] })
 diff --git a/packages/host/webserver/README.i18n.yaml b/packages/host/webserver/README.i18n.yaml
-index 61f92b3798..1dee179778 100644
+index 7a81b0a0db..f594557d1e 100644
 --- a/packages/host/webserver/README.i18n.yaml
 +++ b/packages/host/webserver/README.i18n.yaml
 @@ -12,8 +12,8 @@
-   en: 0d1ffed238b25446
-   zh: 9f66adce1c593c53
+   en: 1b108512b7e28a95
+   zh: ea6e7832392fe32a
  /deepseek-ai-dsh-host-webserver/table-of-contents:
 -  en: d152484eb41ac6b4
 -  zh: 09388d293f9be9cb
@@ -385,7 +385,7 @@ index 61f92b3798..1dee179778 100644
    en: 9aa6b8cf92d5b506
    zh: 55ee3f6ad1cace50
 diff --git a/packages/host/webserver/README.md b/packages/host/webserver/README.md
-index 8b03024639..8eca1dea81 100644
+index 59313177e2..4846f36732 100644
 --- a/packages/host/webserver/README.md
 +++ b/packages/host/webserver/README.md
 @@ -17,6 +17,7 @@ Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http`
@@ -396,7 +396,7 @@ index 8b03024639..8eca1dea81 100644
  - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
  - [Dev Note](#dev-note)
  
-@@ -119,6 +120,20 @@ None, as the HTTP carrier bridges browser and API handler and registers nothing
+@@ -121,6 +122,20 @@ None, as the HTTP carrier bridges browser and API handler and registers nothing
  
  None; this package neither assembles nor sends a provider request.
  
@@ -418,7 +418,7 @@ index 8b03024639..8eca1dea81 100644
  
  <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/host/webserver/README.zh.md b/packages/host/webserver/README.zh.md
-index 29802a53a5..fffb7f67dd 100644
+index aa8cde6345..b6754a0e97 100644
 --- a/packages/host/webserver/README.zh.md
 +++ b/packages/host/webserver/README.zh.md
 @@ -17,6 +17,7 @@ kind: "package-reference"
@@ -429,7 +429,7 @@ index 29802a53a5..fffb7f67dd 100644
  - [已知限制与延期工作](#known-limitations-and-deferred-work)
  - [开发备注](#dev-note)
  
-@@ -119,6 +120,20 @@ index 启动输入分两层。`collectIndexInjections()` 收集一张全新的
+@@ -121,6 +122,20 @@ index 启动输入分两层，按页面所代表的 Peer 计算。`collectIndexI
  
  无；该包既不组装也不发送提供方请求。
  
@@ -451,10 +451,10 @@ index 29802a53a5..fffb7f67dd 100644
  
  <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/host/webserver/src/index.ts b/packages/host/webserver/src/index.ts
-index 73139550d3..4e1f1a0fd0 100644
+index 6d613e8a49..730217b801 100644
 --- a/packages/host/webserver/src/index.ts
 +++ b/packages/host/webserver/src/index.ts
-@@ -101,6 +101,38 @@ export interface Config {
+@@ -122,6 +122,38 @@ export interface Config {
    compressionLevel?: number
    /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
    compressionThresholdBytes?: number
@@ -493,7 +493,7 @@ index 73139550d3..4e1f1a0fd0 100644
  }
  
  const DEFAULT_COMPRESSION = 'none' as const
-@@ -280,9 +312,6 @@ export class WebServer extends Service {
+@@ -359,9 +391,6 @@ export class WebServer extends Service {
      host: z.transform(z.string(), (value) => {
        const parsed = parseIpLiteral(value)
        if (parsed === undefined) throw notLiteralError(value)
@@ -503,7 +503,7 @@ index 73139550d3..4e1f1a0fd0 100644
        return value
      }).required(),
      port: z.natural().max(65535).required(),
-@@ -294,6 +323,10 @@ export class WebServer extends Service {
+@@ -373,6 +402,10 @@ export class WebServer extends Service {
      compression: z.union([z.const('none'), z.const('gzip')]).default(DEFAULT_COMPRESSION),
      compressionLevel: z.number().step(1).min(0).max(9).default(DEFAULT_COMPRESSION_LEVEL),
      compressionThresholdBytes: z.natural().default(DEFAULT_COMPRESSION_THRESHOLD_BYTES),
@@ -513,8 +513,8 @@ index 73139550d3..4e1f1a0fd0 100644
 +    }).default(undefined as never),
    })
  
-   private readonly exact = new Map<string, WebRoute>()
-@@ -317,6 +350,7 @@ export class WebServer extends Service {
+   private readonly exact = new Map<string, WebRoute | WebResourceRoute>()
+@@ -396,6 +429,7 @@ export class WebServer extends Service {
  
    constructor(ctx: Context, private config: Config) {
      super(ctx, 'webServer')
@@ -523,19 +523,19 @@ index 73139550d3..4e1f1a0fd0 100644
      // Schemastery passes an explicit `tls: null` through; only a real object serves TLS.
      this.tlsConfig = resolved.tls ?? undefined
 diff --git a/packages/host/webserver/tests/webserver.spec.ts b/packages/host/webserver/tests/webserver.spec.ts
-index 3dad1dd472..7867e9c10b 100644
+index 783b0c86dc..4d3572d3c7 100644
 --- a/packages/host/webserver/tests/webserver.spec.ts
 +++ b/packages/host/webserver/tests/webserver.spec.ts
-@@ -21,7 +21,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
- import { Context, FiberState } from '@deepseek-ai/cordis'
- import Loader from '@deepseek-ai/cordis-plugin-loader'
+@@ -23,7 +23,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
  import Include from '@deepseek-ai/cordis-plugin-include'
--import HttpServer, { bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
-+import HttpServer, { assertBindHost, bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig } from '../src/index.ts'
+ import type { PeerScope } from '@deepseek-ai/dsh-typert-protocol'
+ import HttpServer, {
+-  bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig, type WebResource, type WebRoute,
++  assertBindHost, bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig, type WebResource, type WebRoute,
+ } from '../src/index.ts'
  import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
  
- /** One-shot barrier for disposal overlapping a pending PEM read. */
-@@ -241,7 +241,7 @@ describe('real Loader composition', () => {
+@@ -262,7 +262,7 @@ describe('real Loader composition', () => {
        '::ffff:0.0.0.0', '::ffff:0:0', '::ffff:0000:0000', '0:0:0:0:0:ffff:0:0',
        '0:0:0:0:0:ffff:0.0.0.0', '::ffff:0.0.0.0%eth0',
      ]) {
@@ -544,7 +544,7 @@ index 3dad1dd472..7867e9c10b 100644
          /is an unspecified \(wildcard\) address, which is not supported/,
        )
      }
-@@ -251,6 +251,22 @@ describe('real Loader composition', () => {
+@@ -272,6 +272,22 @@ describe('real Loader composition', () => {
      }
    })
  
@@ -569,4 +569,5 @@ index 3dad1dd472..7867e9c10b 100644
      // whose await carries the schema error rather than rejecting loader.await().
 -- 
 2.53.0
+
 
