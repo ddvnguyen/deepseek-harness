@@ -86,16 +86,17 @@ jobs:
       - name: checkout harness pin
         uses: actions/checkout@v4
         with:
-          ref: 19caaf271abf0d380f48d125b1d9548a53be8793
+          ref: harness-pin
           path: harness-pin
       - name: deploy (TARGET=x; script from the reviewed ref, product tree as-is)
-        run: bash deploy-scripts/scripts/deploy/dsh-deploy.sh
+        run: |
+          export HARNESS_SHA_EXPECT=$(git -C harness-pin rev-parse HEAD)
+          bash deploy-scripts/scripts/deploy/dsh-deploy.sh
         env:
           TARGET: x
           DRY_RUN: ${{ env.DRY_RUN }}
           REPO_ROOT: ${{ github.workspace }}
           HARNESS_ROOT: ${{ github.workspace }}/harness-pin
-          HARNESS_SHA_EXPECT: 19caaf271abf0d380f48d125b1d9548a53be8793
           CLOUDS_ROOT: /mnt/workspace/clouds
           SERVICE: dsh-x
           TRUSTED_HOST: dsh-x.ddvnguyen.com
@@ -145,16 +146,17 @@ jobs:
       - name: checkout harness pin
         uses: actions/checkout@v4
         with:
-          ref: 19caaf271abf0d380f48d125b1d9548a53be8793
+          ref: harness-pin
           path: harness-pin
       - name: deploy (TARGET=z; script from the reviewed ref, product tree as-is)
-        run: bash deploy-scripts/scripts/deploy/dsh-deploy.sh
+        run: |
+          export HARNESS_SHA_EXPECT=$(git -C harness-pin rev-parse HEAD)
+          bash deploy-scripts/scripts/deploy/dsh-deploy.sh
         env:
           TARGET: z
           DRY_RUN: ${{ env.DRY_RUN }}
           REPO_ROOT: ${{ github.workspace }}
           HARNESS_ROOT: ${{ github.workspace }}/harness-pin
-          HARNESS_SHA_EXPECT: 19caaf271abf0d380f48d125b1d9548a53be8793
           CLOUDS_ROOT: /mnt/workspace/clouds
           SERVICE: dsh-z
           TRUSTED_HOST: dsh-z.ddvnguyen.com
