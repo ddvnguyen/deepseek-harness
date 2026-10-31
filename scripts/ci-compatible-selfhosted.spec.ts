@@ -150,7 +150,7 @@ describe('Node compatibility self-hosted routing', () => {
       ['/runner temp/node-compat-toolcache-other/node', 1],
     ] as const) {
       const child = spawnSync('bash', ['-e', '-u', '-o', 'pipefail', '-c', 'node() { printf "%s" "$TEST_EXECUTABLE"; }; ' + step.run!], {
-        env: { PATH: process.env.PATH, RUNNER_TEMP: '/runner temp', TEST_EXECUTABLE: executable }, encoding: 'utf8', timeout: 10_000,
+        env: { PATH: process.env.PATH, HOME: '/runner temp', RUNNER_TEMP: '/runner temp', TEST_EXECUTABLE: executable }, encoding: 'utf8', timeout: 10_000,
       })
       expect(child.error).toBeUndefined()
       expect(child.signal).toBeNull()
