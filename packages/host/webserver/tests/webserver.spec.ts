@@ -262,7 +262,7 @@ describe('real Loader composition', () => {
       '::ffff:0.0.0.0', '::ffff:0:0', '::ffff:0000:0000', '0:0:0:0:0:ffff:0:0',
       '0:0:0:0:0:ffff:0.0.0.0', '::ffff:0.0.0.0%eth0',
     ]) {
-      expect(() => assertBindHost(host)).toThrow(
+      expect(() => { assertBindHost(host) }).toThrow(
         /is an unspecified \(wildcard\) address, which is not supported/,
       )
     }
@@ -277,10 +277,10 @@ describe('real Loader composition', () => {
   it('accepts a wildcard bind only under the fork.allowWildcardHost opt-in', () => {
     for (const host of ['0.0.0.0', '::', '::ffff:0.0.0.0']) {
       expect(HttpServer.Config({ host, port: 0, fork: { allowWildcardHost: true } }).host).toBe(host)
-      expect(() => assertBindHost(host, { allowWildcardHost: true })).not.toThrow()
-      expect(() => assertBindHost(host, { allowWildcardHost: false }))
+      expect(() => { assertBindHost(host, { allowWildcardHost: true }) }).not.toThrow()
+      expect(() => { assertBindHost(host, { allowWildcardHost: false }) })
         .toThrow(/is an unspecified \(wildcard\) address, which is not supported/)
-      expect(() => assertBindHost(host, undefined))
+      expect(() => { assertBindHost(host, undefined) })
         .toThrow(/is an unspecified \(wildcard\) address, which is not supported/)
     }
     // The opt-in lifts only the wildcard rule, never the literal rule.

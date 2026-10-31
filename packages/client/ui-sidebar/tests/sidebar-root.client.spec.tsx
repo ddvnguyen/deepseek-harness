@@ -63,13 +63,13 @@ function mountShell({ collapsed = false, width = 300, shortcuts = [] }: {
       startSession={startSession} toggleSidebar={toggleSidebar} trackEntryClick={trackEntryClick} t={t}
       renderSlot={((
         key: string,
-        owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
+        owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps | SidebarSectionsOwnerProps,
       ) => {
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
         if (key === 'sidebar.toggle.badge') return null
         if (key === 'sidebar.sections') {
-          sectionsOwner = owner as SidebarSectionsOwnerProps
+          sectionsOwner = owner
           return <div data-testid="sections-seat" data-wide={owner.wide} />
         }
         if (key === 'sidebar.settings') {
