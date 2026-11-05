@@ -98,6 +98,8 @@ tab 类型分两阶段注册，随包发布的引导类型走的正是别的包�
 
 `hostPanel(panelId)` 是给「自己的 `main` 面板占据主栏」的插件的开关。在插件的 effect 里调用，返回一个 disposer，形状与 `ctx.sidebarRightTabs.register` 相同：该面板活跃期间，这一列渲染在它旁边，`mounted` 报告选中的会话，所有命令都作用于它，于是被 host 的面板可以在自己的内容旁边打开文件与终端 tab，而不是把它们替换掉。没有被 host 的面板照旧隐藏这一列；在面板活跃时释放最后一个 claim 也会重新隐藏它——席位上报 `shown: false`，框架关闭这一列，同时保留该会话的 tab 状态以便返回。claim 按面板计数，因此两个插件可以 host 同一个面板而不会互相释放，重复执行的 disposer 也不会释放两次。`expanded` 就是 `isExpanded()` 读取的那个事实，作为订阅供插件 header 绘制按下状态的开关：没有会话在屏幕上、或运行时尚未创建该会话的 store 时为 `false`，并且在改变它的那次提交之后（而不是之中）发布。
 
+`selectHostedSession(sessionId)` 指定这一列显示的会话：被 host 的面板占据主栏，没有 Conversation 来指认它的工作区，不指定的话这一列显示的是 Conversation 最近选中的那个会话，面板的文件与终端就会改到错误的目录。在插件的 effect 里与它的 `hostPanel` claim 并列调用，返回一个 disposer；只有 host 该列的面板活跃时这个名字才生效——Conversation 在主栏时，这一列照旧跟随选中项。后调用者生效，而 disposer 只在它仍是当前生效的那个名字时才撤下它。`hostedSession` 就是这个名字的订阅。
+
 `focusedTarget(element?)` 解析当前 DOM 分栏和标签页，也接受嵌入 iframe；焦点位于外部时不返回页面。`commandTarget(element?)` 另外允许外部打开动作使用屏幕上会话的活动停靠分栏。捕获值包含 occurrence 和导航版本；`isTargetCurrent(target)` 拒绝会话变更、已移动或重新打开的标签页，以及期间发生的导航。焦点和指针激活独立于持久化的布局选择。
 
 <a id="the-tab-domain"></a>

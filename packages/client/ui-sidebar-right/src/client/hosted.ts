@@ -1,6 +1,6 @@
 /**
  * The global `main` panels a plugin has asked the right Sidebar to render
- * beside.
+ * beside, and the Session it named for that column.
  *
  * The column follows the Conversation: while a global panel fills the main
  * column no Session is on screen, so the panel seat draws nothing and every
@@ -14,8 +14,17 @@
  * and either one's disposer leaves the other's claim standing. Releasing the
  * last claim while the panel is active hides the column exactly as a panel that
  * was never hosted does.
+ *
+ * A hosted panel fills the main column, so no Conversation names its Workspace:
+ * the column would otherwise show whatever Session the Conversation last
+ * selected. `ctx.sidebarRight.selectHostedSession` names that Session instead,
+ * and both the service's on-screen Session and the root seat's retained views
+ * read this one source, so a name set or withdrawn settles in one commit. The
+ * name applies only while a panel that hosts the column is active; with the
+ * Conversation in the main column the column keeps following the selection.
  */
 import { createSnapshotStore, type ObservableSnapshot, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** The set no panel is in; shared so an unhosted product allocates nothing per read. */
 const NO_PANELS: ReadonlySet<string> = new Set()
@@ -60,5 +69,34 @@ export class HostedPanels {
 
   private publish(): void {
     this.store.set(new Set(this.claims.keys()))
+  }
+}
+
+/** The Session a plugin named for the hosted column, and the name's withdrawal. */
+export class HostedSession {
+  /** The named Session, or `undefined`; a stable snapshot between changes. */
+  readonly source: ObservableSnapshot<SessionId | undefined>
+  /** The writable face the name publishes through. */
+  private readonly store: SnapshotStore<SessionId | undefined>
+
+  constructor() {
+    this.store = createSnapshotStore<SessionId | undefined>(undefined)
+    this.source = this.store
+  }
+
+  /**
+   * Name the Session the hosted column shows.
+   * @param sessionId - Session whose Workspace the hosted panel edits.
+   * @returns a disposer withdrawing this name while it is still the one in force.
+   */
+  select(sessionId: SessionId): () => void {
+    this.store.set(sessionId)
+    let released = false
+    return () => {
+      // A disposer that runs twice must not withdraw a later plugin's name.
+      if (released) return
+      released = true
+      if (this.store.getSnapshot() === sessionId) this.store.set(undefined)
+    }
   }
 }

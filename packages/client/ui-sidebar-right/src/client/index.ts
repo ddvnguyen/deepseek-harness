@@ -111,13 +111,6 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   const tabs = new SidebarRightTabRegistry(ctx)
   const views = new SidebarSessionViews(ctx.sessions)
-  ctx.effect(() => {
-    const current = ctx.uiSession.adapter.current
-    const sync = (): void => { views.select(current.getSnapshot().key as SessionId | undefined) }
-    const unsubscribe = current.subscribe(sync)
-    sync()
-    return () => { unsubscribe(); views.dispose() }
-  }, 'ui-sidebar-right: retained Session views')
   const layout: ILayout = ctx.layout
   // The automatic fullscreen rule as the seats last rendered it: the frame
   // hands them its width as owner props, and every seat reports the same rule.
@@ -131,6 +124,34 @@ export function apply(ctx: ClientContext): void {
       closeWithFocus: (sessionId, paneId, close) => { closeWithPaneFocus(document, sessionId, paneId, close) },
     },
   )
+  // Which Session the column shows: the selected one while the Conversation
+  // fills the main column, and the Session a plugin named for it while its own
+  // panel does. Both are read together so a panel switch, a host, and a new
+  // name each settle in one pass; naming a Session reaches the render targets
+  // and the on-screen Session from this one place.
+  const hostedColumn = (): boolean => {
+    const activePanelId = layout.panelInfo.getSnapshot().activePanelId
+    return activePanelId !== null && controller.hostedPanels.getSnapshot().has(activePanelId)
+  }
+  ctx.effect(() => {
+    const current = ctx.uiSession.adapter.current
+    const sync = (): void => {
+      const named = hostedColumn() ? controller.hostedSession.getSnapshot() : undefined
+      views.select((named ?? current.getSnapshot().key) as SessionId | undefined)
+    }
+    const unsubscribe = current.subscribe(sync)
+    const unsubscribePanel = layout.panelInfo.subscribe(sync)
+    const unsubscribeHosted = controller.hostedPanels.subscribe(sync)
+    const unsubscribeNamed = controller.hostedSession.subscribe(sync)
+    sync()
+    return () => {
+      unsubscribe()
+      unsubscribePanel()
+      unsubscribeHosted()
+      unsubscribeNamed()
+      views.dispose()
+    }
+  }, 'ui-sidebar-right: retained Session views')
   // The Session on screen: the selected one while the Conversation fills the
   // main column, or while a global panel that hosts the column fills it. Both
   // sources notify before React renders their change, so the service names the

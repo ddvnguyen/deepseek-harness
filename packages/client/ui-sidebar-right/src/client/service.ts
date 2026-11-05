@@ -36,7 +36,7 @@
 import { sidebarTargetFromElement, type SidebarRightTarget } from './focus.ts'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import { HostedPanels } from './hosted.ts'
+import { HostedPanels, HostedSession } from './hosted.ts'
 import type { FloatRect, PaneId, TabId, TabRecord } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { activeDockPaneId, canSplit, findContentTab, findPaneContentTab, dockPaneIds, findTabPane, getPane } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
@@ -80,6 +80,8 @@ interface SidebarRightSessions {
   readonly expanded: ObservableSnapshot<boolean>
   /** The global `main` panels a plugin hosts the column beside. */
   readonly hosted: HostedPanels
+  /** The Session a plugin named for the hosted column, or `undefined`. */
+  readonly hostedSession: HostedSession
   /** Open tab metadata across saved and adopted Sessions. */
   readonly openTabs: SidebarTabInventory['source']
 }
@@ -104,6 +106,7 @@ export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin:
   const onScreen = createSnapshotStore<SessionId | undefined>(undefined)
   const expanded = createSnapshotStore(false)
   const hosted = new HostedPanels()
+  const hostedSession = new HostedSession()
   const inventory = new SidebarTabInventory()
   /**
    * Mirror the on-screen Session's expansion for subscribers. The store's own
@@ -116,7 +119,9 @@ export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin:
     const next = surface?.layout.expanded ?? false
     if (expanded.getSnapshot() !== next) expanded.set(next)
   }
-  const controller = new SidebarRightController(tabs, pin, host, { adopted, rooms, onScreen, expanded, hosted, openTabs: inventory.source })
+  const controller = new SidebarRightController(tabs, pin, host, {
+    adopted, rooms, onScreen, expanded, hosted, hostedSession, openTabs: inventory.source,
+  })
   return {
     controller,
     forget: (sessionId) => {
@@ -242,6 +247,28 @@ export interface ISidebarRight {
    */
   hostPanel(panelId: string): () => void
   /**
+   * The Session `selectHostedSession` named, or `undefined` while none is.
+   *
+   * The column shows this Session instead of the selected one while a panel
+   * that hosts it fills the main column, and follows the selection again when
+   * that panel leaves or the claim is released.
+   */
+  readonly hostedSession: ObservableSnapshot<SessionId | undefined>
+  /**
+   * Name the Session the hosted column shows, so a hosted panel's files and
+   * terminal point at its own Workspace instead of whatever Session the
+   * Conversation last selected.
+   *
+   * Call it inside `ctx.effect` and return its disposer, beside the
+   * `hostPanel` claim it belongs to. The name applies only while a hosting
+   * panel is active: with the Conversation in the main column the column keeps
+   * following the selection. The last call wins; a disposer clears the name
+   * only while it is still the one in force.
+   * @param sessionId - Session whose Workspace the hosted panel edits.
+   * @returns a disposer withdrawing this name.
+   */
+  selectHostedSession(sessionId: SessionId): () => void
+  /**
    * Open a resource: claim it, place it, reveal the column, record the navigation.
    *
    * Without `options.kind` the registry ranks the types whose globs and
@@ -320,7 +347,10 @@ export class SidebarRightController implements ISidebarRight {
   readonly expanded: ObservableSnapshot<boolean>
   /** The hosted-panel set both gates read; see {@link ISidebarRight.hostPanel}. */
   readonly hostedPanels: ObservableSnapshot<ReadonlySet<string>>
+  /** The Session the hosted column shows; see {@link ISidebarRight.hostedSession}. */
+  readonly hostedSession: ObservableSnapshot<SessionId | undefined>
   private readonly hosted: HostedPanels
+  private readonly hostedTarget: HostedSession
   private readonly adopted: ReadonlyMap<SessionId, Adoption>
   private readonly rooms: ReadonlyMap<SessionId, RoomRule>
   private readonly closeHandlers = new Map<string, SidebarRightCloseHandler>()
@@ -361,6 +391,8 @@ export class SidebarRightController implements ISidebarRight {
     this.expanded = sessions.expanded
     this.hosted = sessions.hosted
     this.hostedPanels = sessions.hosted.source
+    this.hostedSession = sessions.hostedSession.source
+    this.hostedTarget = sessions.hostedSession
     this.openTabs = sessions.openTabs
     this.tabDomain = new TabDomain(this, pin)
   }
@@ -372,6 +404,15 @@ export class SidebarRightController implements ISidebarRight {
    */
   hostPanel(panelId: string): () => void {
     return this.hosted.host(panelId)
+  }
+
+  /**
+   * Name the Session the hosted column shows.
+   * @param sessionId - Session whose Workspace the hosted panel edits.
+   * @returns a disposer withdrawing this name; see {@link ISidebarRight.selectHostedSession}.
+   */
+  selectHostedSession(sessionId: SessionId): () => void {
+    return this.hostedTarget.select(sessionId)
   }
 
   /**

@@ -77,7 +77,8 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
     catalog: { getSnapshot: () => SHORTCUT_CATALOG, subscribe: () => () => {} }, ...shortcuts } as never)
   ctx.provide('layout', layout as never)
   ctx.provide('resources', resources as never)
-  ctx.provide('sessions', { retain: vi.fn(() => ({ ready: Promise.resolve(), release: vi.fn() })) } as never)
+  const sessions = { retain: vi.fn(() => ({ ready: Promise.resolve(), release: vi.fn() })) }
+  ctx.provide('sessions', sessions as never)
   ctx.provide('uiSession', { adapter: { current } } as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
@@ -90,7 +91,7 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
     if (entry.inject === undefined) throw new Error(`expected ${entry.name} to inject`)
     return entry.inject(SESSION)
   }
-  return { ctx, slots, registered, dictionaries, layout, current, resources, fiber, seat, injectedOf }
+  return { ctx, slots, registered, dictionaries, layout, current, resources, sessions, fiber, seat, injectedOf }
 }
 
 describe('ui-sidebar-right apply', () => {
@@ -185,6 +186,34 @@ describe('ui-sidebar-right apply', () => {
     elsewhere()
     expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
     // The Conversation is unchanged by any claim.
+    layout.panelInfo.set({ activePanelId: null })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+  })
+
+  it('shows the Session a plugin named while its panel hosts the column', async () => {
+    const { ctx, layout, current, sessions } = await boot()
+    const OTHER = 's-other' as SessionId
+    current.set({ key: SESSION })
+    const releaseHost = ctx.sidebarRight.hostPanel('mmx')
+    const releaseName = ctx.sidebarRight.selectHostedSession(OTHER)
+    // Naming a Session does not move the column while the Conversation is on screen.
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    layout.panelInfo.set({ activePanelId: 'mmx' })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(OTHER)
+    // The render targets follow the name, so the column has the Session to draw.
+    expect(sessions.retain).toHaveBeenCalledWith(OTHER, { source: 'sidebarView' })
+    // Withdrawing the name returns the column to the selection.
+    releaseName()
+    expect(ctx.sidebarRight.hostedSession.getSnapshot()).toBeUndefined()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    // A disposer that runs twice withdraws nothing twice, and a released host
+    // withdraws the column whatever the name said.
+    const second = ctx.sidebarRight.selectHostedSession(OTHER)
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(OTHER)
+    second()
+    releaseHost()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    // The Conversation's own selection never changed.
     layout.panelInfo.set({ activePanelId: null })
     expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
   })
