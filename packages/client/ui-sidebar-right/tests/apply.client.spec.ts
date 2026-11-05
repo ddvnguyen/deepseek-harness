@@ -206,11 +206,20 @@ describe('ui-sidebar-right apply', () => {
     releaseName()
     expect(ctx.sidebarRight.hostedSession.getSnapshot()).toBeUndefined()
     expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    // The last name wins, and withdrawing an older one leaves the newer
+    // standing — a plugin that re-targets does not have to order its teardown.
+    const older = ctx.sidebarRight.selectHostedSession(OTHER)
+    const SECOND = 's-second' as SessionId
+    const newer = ctx.sidebarRight.selectHostedSession(SECOND)
+    older()
+    expect(ctx.sidebarRight.hostedSession.getSnapshot()).toBe(SECOND)
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SECOND)
     // A disposer that runs twice withdraws nothing twice, and a released host
     // withdraws the column whatever the name said.
-    const second = ctx.sidebarRight.selectHostedSession(OTHER)
-    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(OTHER)
-    second()
+    newer()
+    newer()
+    expect(ctx.sidebarRight.hostedSession.getSnapshot()).toBeUndefined()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
     releaseHost()
     expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
     // The Conversation's own selection never changed.

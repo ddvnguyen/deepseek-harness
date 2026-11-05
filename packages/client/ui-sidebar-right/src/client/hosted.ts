@@ -35,8 +35,12 @@ export class HostedPanels {
   readonly source: ObservableSnapshot<ReadonlySet<string>>
   /** The writable face the claims publish through; only `host` writes it. */
   private readonly store: SnapshotStore<ReadonlySet<string>>
-  /** Live claims per panel id; a panel is hosted while its count is positive. */
-  private readonly claims = new Map<string, number>()
+  /**
+   * The live claims per panel id; a panel is hosted while its cell counts one.
+   * Every disposer holds its panel's cell, so releasing a claim reads the count
+   * it shares with the other claims rather than a lookup that assumes an entry.
+   */
+  private readonly claims = new Map<string, { count: number }>()
 
   constructor() {
     this.store = createSnapshotStore<ReadonlySet<string>>(NO_PANELS)
@@ -49,19 +53,20 @@ export class HostedPanels {
    * @returns a disposer releasing this claim; other claims on the panel keep theirs.
    */
   host(panelId: string): () => void {
-    const claims = (this.claims.get(panelId) ?? 0) + 1
-    this.claims.set(panelId, claims)
-    if (claims === 1) this.publish()
+    let claim = this.claims.get(panelId)
+    if (claim === undefined) {
+      claim = { count: 0 }
+      this.claims.set(panelId, claim)
+    }
+    claim.count += 1
+    if (claim.count === 1) this.publish()
     let released = false
     return () => {
       // A disposer that runs twice must not release someone else's claim.
       if (released) return
       released = true
-      const remaining = (this.claims.get(panelId) ?? 0) - 1
-      if (remaining > 0) {
-        this.claims.set(panelId, remaining)
-        return
-      }
+      claim.count -= 1
+      if (claim.count > 0) return
       this.claims.delete(panelId)
       this.publish()
     }
