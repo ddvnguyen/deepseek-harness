@@ -572,7 +572,9 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
-    needs: [node-24, node-24-coverage, node-24-lint, node-24-bench, node-24-consumers, node-compat]
+    # node-24-bench still runs and reports, but is not a merge gate (fork decision, M-97): its peak-RSS
+    # assertion samples one unrepeated process and flakes on a busy runner.
+    needs: [node-24, node-24-coverage, node-24-lint, node-24-consumers, node-compat]
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     steps:
       - name: Fail if any needed job did not succeed
