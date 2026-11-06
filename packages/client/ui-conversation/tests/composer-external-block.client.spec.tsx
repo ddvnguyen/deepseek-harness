@@ -37,9 +37,14 @@ function externalBlockStore(
   runtime: SlotTestRuntime,
 ): ObservableSnapshot<ComposerBlock | undefined> {
   const definition = runtime.factoryOf('conversation.content')
-  return ((definition.inject as unknown as (
-    sessionId: SessionId | undefined,
-  ) => { hooks: { composerBlock: ObservableSnapshot<ComposerBlock | undefined> } })(SID)).hooks.composerBlock
+  const slotInject = definition.inject
+  if (slotInject === undefined) throw new Error('conversation.content: no inject')
+  const injected = (slotInject as (...args: unknown[]) => Record<string, unknown>)(SID)
+  const hooks = injected['hooks']
+  if (typeof hooks !== 'object' || hooks === null) throw new Error('conversation.content inject returned no hooks')
+  const composerBlock = (hooks as { composerBlock?: ObservableSnapshot<ComposerBlock | undefined> }).composerBlock
+  if (composerBlock === undefined) throw new Error('conversation.content inject returned no composerBlock hook')
+  return composerBlock
 }
 
 describe('external-writer composer blocks', () => {

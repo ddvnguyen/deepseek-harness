@@ -316,13 +316,11 @@ describe('SessionObservationReader cold path', () => {
     const store = new Map([[meta.id, { header: meta, events: interruptedLog('crashed'), revision: 'r1' }]])
     const counters = { stat: 0, open: 0, read: 0 }
     let live = true
-    ctx.provide('sessionPersistence', stubPersistence(store, counters, {}))
+    const persistence = stubPersistence(store, counters, { liveWriter: true })
+    ctx.provide('sessionPersistence', persistence)
     // The probe flips after the live read survived into the cache with the
     // same revision: the reader must not replay an unbalanced seed for a
     // settled writer, so revalidation reloads through the fresh read.
-    const persistence = ctx.get('sessionPersistence') as unknown as {
-      writeLease: (sessionId: string) => Promise<unknown>
-    }
     vi.spyOn(persistence, 'writeLease').mockImplementation(
       () => Promise.resolve(live ? { running: true } : undefined),
     )
@@ -344,13 +342,11 @@ describe('SessionObservationReader cold path', () => {
     const meta = header('interrupted-probe-unknown')
     const store = new Map([[meta.id, { header: meta, events: interruptedLog('in-flight'), revision: 'r1' }]])
     const counters = { stat: 0, open: 0, read: 0 }
-    ctx.provide('sessionPersistence', stubPersistence(store, counters, {}))
+    const persistence = stubPersistence(store, counters, { liveWriter: true })
+    ctx.provide('sessionPersistence', persistence)
     // First probe: live (the seed is read unbalanced). Every later probe:
     // refused — unknown, not settled.
     let probeCalls = 0
-    const persistence = ctx.get('sessionPersistence') as unknown as {
-      writeLease: (sessionId: string) => Promise<unknown>
-    }
     vi.spyOn(persistence, 'writeLease').mockImplementation(() => {
       probeCalls += 1
       if (probeCalls === 1) return Promise.resolve({ running: true })
