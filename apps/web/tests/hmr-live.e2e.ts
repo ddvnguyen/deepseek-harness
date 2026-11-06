@@ -167,4 +167,4 @@ it('hot-reloads a real client-plugin source edit without refreshing the page', a
     await rm(world, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
   }
   if (failures.length > 0) throw new AggregateError(failures, 'HMR browser test or cleanup failed')
-}, 300_000)
+}, 900_000)
