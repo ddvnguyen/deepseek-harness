@@ -26,6 +26,12 @@ interface SessionRecord {
   persisted: boolean
   /** Current for live Sessions; otherwise the persistence format status when reported. */
   formatStatus?: 'current' | 'migration-required'
+  /**
+   * The write-lease probe the persisted backend reported alongside the
+   * listing snapshot, when it reported one: truthful external liveness for
+   * listing consumers without a per-row id-resolution probe.
+   */
+  lease?: SessionExternalWriterProbe
 }
 ```
 

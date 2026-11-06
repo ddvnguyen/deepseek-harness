@@ -185,6 +185,14 @@ interface SessionHeader {
    * would replay history the model can no longer act on.
    */
   readonly agentPreset?: string
+  /**
+   * Opaque label of the external producer that owns this session's write
+   * side (for example an external run bridge: "Multica run M-142"), stamped
+   * at create from the process environment. Presentation metadata only: the
+   * write lease — not this label — decides who may write, and a resumed
+   * session keeps its original header unchanged.
+   */
+  readonly externalOwner?: string
 }
 ```
 
@@ -223,6 +231,7 @@ interface CreateSessionOptions {
     readonly origin?: 'subagent'
     readonly delegationDepth?: number
     readonly agentPreset?: string
+    readonly externalOwner?: string
   }
 }
 ```
@@ -329,6 +338,14 @@ interface SessionPersistenceSnapshot {
    * materialized per-Session file, including an unmaterialized pending Session.
    */
   readonly location?: SessionLocation
+  /**
+   * The session's write-lease probe ({@link SessionExternalWriterProbe}), when
+   * the backend can derive it from the artifact it just resolved without an
+   * extra id-resolution pass; absent otherwise, including routinely on
+   * unmaterialized sessions. Cheap listings read external liveness from here
+   * instead of one {@link SessionPersistence.writeLease} resolution per row.
+   */
+  readonly lease?: SessionExternalWriterProbe
 }
 ```
 
