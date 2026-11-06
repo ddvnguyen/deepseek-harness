@@ -115,9 +115,9 @@ describe('CI workflow', () => {
     // Splitting the workflows only moves jobs between verdicts; the blocking
     // set itself must stay identical, or branch protection would accept a
     // failure it rejected before the split.
+    // Fork decision (M-97): node-24-bench still runs but no longer gates.
     expect(blocking.sort()).toEqual([
       'node-24',
-      'node-24-bench',
       'node-24-consumers',
       'node-24-coverage',
       'node-24-lint',
@@ -547,7 +547,7 @@ describe('CI workflow', () => {
     expect(windowsAggregate.if).toBe(aggregate.if)
     // The benchmark lane is a required verdict input and runs alone so its
     // wall-clock budgets never share a runner with a concurrent aggregate.
-    expect(aggregate.needs).toContain('node-24-bench')
+    expect(aggregate.needs).not.toContain('node-24-bench')
     expect(node24Bench.name).toBe('node 24 / benchmarks')
     expect(node24Bench.env).toBeUndefined()
     expect(node24Bench.steps).toContainEqual({
@@ -692,7 +692,7 @@ describe('CI workflow', () => {
     expect(benchmark.needs).toBeUndefined()
     expect(benchmark['continue-on-error']).toBeUndefined()
     expect(benchmark.env).toBeUndefined()
-    expect(aggregate.needs).toContain('node-24-bench')
+    expect(aggregate.needs).not.toContain('node-24-bench')
   })
 
   it('always restores the hosted benchmark pnpm cache', () => {
