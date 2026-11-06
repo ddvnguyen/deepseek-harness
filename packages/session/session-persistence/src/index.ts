@@ -83,6 +83,7 @@ export interface SessionPersistenceSnapshot {
    * materialized per-Session file, including an unmaterialized pending Session.
    */
   readonly location?: SessionLocation
+  /**
    * The session's write-lease probe ({@link SessionExternalWriterProbe}), when
    * the backend can derive it from the artifact it just resolved without an
    * extra id-resolution pass; absent otherwise, including routinely on

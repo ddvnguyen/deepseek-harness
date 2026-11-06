@@ -2,7 +2,9 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
-import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
+import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import { readColdSessionLog, type SessionObservation } from '@deepseek-ai/dsh-session-query'
+import type { SessionPersistenceRevision } from '@deepseek-ai/dsh-session-persistence'
 import type { HistoryController } from '../history/controller.ts'
 import { addressId, rejectNotFound } from '../history.ts'
 import { EventListener, ListenerBuffer } from '../history/listener.ts'
@@ -44,6 +46,7 @@ export class WebController {
         throw error
       })
     validateObservationAddress(request.address, observation)
+    const snapshotRevision = observation.revision
     let opening: SessionFollowFrame = {
       type: 'snapshot',
       header: { ...observation.header },
@@ -73,6 +76,109 @@ export class WebController {
       observation[Symbol.dispose]()
     }
     yield opening
-    yield* queue.items()
+    const tailAbort = new AbortController()
+    const abortTail = (): void => { tailAbort.abort(signal.reason) }
+    signal.addEventListener('abort', abortTail, { once: true })
+    const tail = this.followExternalWriter(
+      sessionId, listener, opening.cursor + 1, snapshotRevision, tailAbort.signal,
+    ).catch((error: unknown) => {
+      if (!tailAbort.signal.aborted) {
+        this.ctx.logger.warn(`external session follow "${sessionId}" stopped: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    })
+    try {
+      yield* queue.items()
+    } finally {
+      signal.removeEventListener('abort', abortTail)
+      tailAbort.abort()
+      await tail
+    }
   }
+
+  private async followExternalWriter(
+    sessionId: SessionId,
+    listener: EventListener,
+    nextSeq: number,
+    initialRevision: SessionPersistenceRevision | undefined,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const persistence = this.ctx.get('sessionPersistence')
+    if (persistence === undefined) return
+    let revision = initialRevision
+    let running = false
+    let initialized = false
+    while (!signal.aborted) {
+      try {
+        const probe = await persistence.writeLease(sessionId, { signal })
+        const snapshot = await persistence.stat(sessionId, { signal })
+        const probeRunning = probe?.running === true
+        const changed = snapshot?.revision !== revision
+        const transitioned = probeRunning !== running
+        if (changed || transitioned) {
+          nextSeq = await this.appendPersistedSuffix(sessionId, listener, nextSeq, signal) + 1
+        }
+        if (transitioned || (!initialized && probeRunning)) {
+          this.ctx.emit(
+            'api-session/status',
+            sessionId,
+            probeRunning,
+            probeRunning ? probe.owner ?? null : null,
+          )
+        }
+        revision = snapshot?.revision
+        running = probeRunning
+        initialized = true
+        if (!running) return
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') return
+        this.ctx.logger.warn(
+          `external session follow "${sessionId}" poll failed: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+      await waitForPoll(signal)
+    }
+  }
+
+  private async appendPersistedSuffix(
+    sessionId: SessionId,
+    listener: EventListener,
+    nextSeq: number,
+    signal: AbortSignal,
+  ): Promise<number> {
+    const persistence = this.ctx.get('sessionPersistence')
+    if (persistence === undefined) return nextSeq - 1
+    const log = await readColdSessionLog(persistence, sessionId, signal)
+    const appended: SessionEvent[] = []
+    const cursor = log.events.at(-1)?.seq ?? -1
+    for (let seq = nextSeq; seq <= cursor; seq += 1) {
+      const event = log.events[seq]
+      if (event !== undefined) appended.push(event)
+    }
+    if (appended.length > 0) listener.appendExternal(appended)
+    return cursor
+  }
+}
+
+function waitForPoll(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(abortError(signal))
+      return
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort)
+      resolve()
+    }, 1_000)
+    const abort = (): void => {
+      clearTimeout(timer)
+      reject(abortError(signal))
+    }
+    signal.addEventListener('abort', abort, { once: true })
+  })
+}
+
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new Error('Session follow was aborted', { cause: signal.reason })
 }

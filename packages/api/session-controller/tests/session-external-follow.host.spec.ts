@@ -10,7 +10,8 @@ import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { EXTERNAL_TAIL_POLL_MS, SessionHistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
+import { HistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history/controller.ts'
+import { WebController } from '@deepseek-ai/dsh-api-session-controller/src/web/controller.ts'
 import { SessionPersistenceRevision, SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import type {
   SessionAccess,
@@ -96,7 +97,7 @@ async function setup(
   hooks: { probes?: (probes: { n: number }) => void } = {},
 ): Promise<{
   ctx: Context
-  transport: SessionHistoryController
+  transport: WebController
   statuses: Array<{ sessionId: SessionId; running: boolean; owner: string | null | undefined }>
   probes: { n: number }
 }> {
@@ -104,7 +105,8 @@ async function setup(
   await ctx.plugin(SessionStore)
   installSessionReadTestServices(ctx)
   const probes = provideExternalPersistence(ctx, store, hooks)
-  const transport = new SessionHistoryController(ctx, (observation) => { observation[Symbol.dispose]() })
+  const history = new HistoryController(ctx)
+  const transport = new WebController(ctx, history, (observation) => { observation[Symbol.dispose]() })
   const statuses: Array<{ sessionId: SessionId; running: boolean; owner: string | null | undefined }> = []
   ctx.on('api-session/status', (sessionId, running, owner) => {
     statuses.push({ sessionId, running, owner })
@@ -178,7 +180,7 @@ describe('external-writer follow tail', () => {
         },
         events: [event('turn/start', SessionSeq(0), ''), event('user/message', SessionSeq(1), 'settled prompt')],
         revision: 'r1',
-        liveWriter: false,
+        liveWriter: true,
         owner: null,
       }
       const seen: Array<{ n: number }> = []
@@ -195,10 +197,9 @@ describe('external-writer follow tail', () => {
       // The pending next drives one tick (with its wait timer) synchronously; the counter has advanced one probe past the opening now.
       const afterOpening = probes.n
 
-      // Five full poll intervals: the current implementation may serve one
-      // wait per timer fire — a busy loop would keep probing thousands of
+      // Five full poll intervals: a busy loop would keep probing thousands of
       // times inside the same virtual spans.
-      const INTERVAL = EXTERNAL_TAIL_POLL_MS + 50
+      const INTERVAL = 1_050
       for (let i = 0; i < 5; i += 1) {
         const before = probes.n
         await vi.advanceTimersByTimeAsync(INTERVAL)
