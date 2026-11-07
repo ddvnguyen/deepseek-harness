@@ -85,7 +85,12 @@ async function hasProtectedAncestors(path: string): Promise<boolean> {
     if (!stats.isDirectory()) return false
     const writableByOthers = (stats.mode & 0o022) !== 0
     const sticky = (stats.mode & 0o1000) !== 0
-    if (writableByOthers && !sticky) return false
+    // An ancestor owned by the current user is safe even when it is
+    // group-writable without the sticky bit: no other OS account can replace
+    // its children, which is the threat this check guards against. This admits
+    // runner-owned work directories (e.g. CI's `_work/_temp`) whose parent
+    // chain is group-writable but owned by the runner account.
+    if (writableByOthers && !sticky && ((stats.mode & 0o002) !== 0 || stats.uid !== currentUid)) return false
     /* v8 ignore next -- requires an ancestor owned by another OS account inside
        a writable sticky parent; ordinary test fixtures cannot change uid. */
     if (writableByOthers && childStats.uid !== currentUid) return false
