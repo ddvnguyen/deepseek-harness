@@ -126,9 +126,11 @@ UNIT_FILE="${UNIT_FILE:-/home/ddv/.config/systemd/user/$SERVICE.service}"
 # a wildcard bind, so the lane binds one concrete address (the host's podman
 # bridge, which is where the Cloudflare tunnel dials), and a smoke on
 # 127.0.0.1 would never reach it.
-LANE_HOST="$(sed -n 's/^ExecStart=.*--host \([^ ]*\) .*/\1/p' "$UNIT_FILE" 2>/dev/null | head -1)"
+LANE_HOST="$(sed -n 's/^ExecStart=.*--host \([^ ]*\).*/\1/p' "$UNIT_FILE" 2>/dev/null | head -1)"
 [ -n "$LANE_HOST" ] || LANE_HOST="127.0.0.1"
-BASE_URL="http://$LANE_HOST:$PORT"
+LANE_PORT="$(sed -n 's/^ExecStart=.*--port \([^ ]*\).*/\1/p' "$UNIT_FILE" 2>/dev/null | head -1)"
+[ -n "$LANE_PORT" ] || LANE_PORT="${PORT:-3180}"
+BASE_URL="http://$LANE_HOST:$LANE_PORT"
 PATCH_FILE="$CLOUDS_ROOT/$SERVICE/data/overlay.yml"
 NODE_BIN="/home/ddv/.nvm/versions/node/v24.15.0/bin/node"
 
@@ -281,7 +283,7 @@ check_host_codes() { # $1 = the host_codes line, $2 = accepted trusted code(s) (
 # is exactly how dsh-x looked healthy on localhost while the public hostname
 # refused every request. The lane is meant to be reachable from the internet
 # (behind the perimeter), so the wildcard bind is the contract.
-grep -q -- '--host 0\.0\.0\.0' "$UNIT_FILE" \
+grep '^ExecStart=' "$UNIT_FILE" | grep -q -- '--host 0\.0\.0\.0' \
   || die "unit $UNIT_FILE does not bind 0.0.0.0; add --host 0.0.0.0 to ExecStart"
 [ -f "$REPO_ROOT/apps/cli/lib/bin.js" ] || die "no built apps/cli/lib/bin.js in $REPO_ROOT — run the build step first"
 [ -d "$HARNESS_ROOT/.git" ] || die "harness checkout missing: $HARNESS_ROOT"
@@ -323,7 +325,7 @@ fi
 # address needs the patch's allowWildcardHost, a concrete address does not.
 # The rehearsal binds 127.0.0.1, so it cannot catch a wildcard refusal; this
 # check does, and it fails with the live lane untouched.
-UNIT_HOST="$(sed -n 's/^ExecStart=.*--host \([^ ]*\) .*/\1/p' "$UNIT_FILE" 2>/dev/null | head -1)"
+UNIT_HOST="$(sed -n 's/^ExecStart=.*--host \([^ ]*\).*/\1/p' "$UNIT_FILE" 2>/dev/null | head -1)"
 case "$UNIT_HOST" in
   0.0.0.0|::|'[::]'|'')
     grep -q 'allowWildcardHost: true' "$PATCH_FILE" \
@@ -478,10 +480,10 @@ SESSION_URL=""
 for _ in $(seq 1 120); do
   if [ -n "$JOURNAL_CURSOR" ]; then
     SESSION_URL="$(journalctl --user -u "$SERVICE" --after-cursor "$JOURNAL_CURSOR" --no-pager 2>/dev/null \
-      | grep -o "http://$LANE_HOST:$PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
+      | grep -o "http://$LANE_HOST:$LANE_PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
   else
     SESSION_URL="$(journalctl --user -u "$SERVICE" --since '-2 min' --no-pager 2>/dev/null \
-      | grep -o "http://$LANE_HOST:$PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
+      | grep -o "http://$LANE_HOST:$LANE_PORT/?token=[A-Za-z0-9_-]*" | tail -1 || true)"
   fi
   [ -n "$SESSION_URL" ] && break
   sleep 0.5
