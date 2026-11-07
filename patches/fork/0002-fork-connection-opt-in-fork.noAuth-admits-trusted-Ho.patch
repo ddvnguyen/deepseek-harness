@@ -22,7 +22,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
  8 files changed, 167 insertions(+), 5 deletions(-)
 
 diff --git a/docs/config-catalog.md b/docs/config-catalog.md
-index 978e02a48e..aea779f5e1 100644
+index 4dd81b281e..d4fa90e844 100644
 --- a/docs/config-catalog.md
 +++ b/docs/config-catalog.md
 @@ -476,6 +476,11 @@ export interface ConnectionConfig {
@@ -61,7 +61,7 @@ index 978e02a48e..aea779f5e1 100644
  <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-connection -->
  
 diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
-index e64a885032..1765234d40 100644
+index 3fc583b03a..147015227b 100644
 --- a/docs/config-catalog.zh.md
 +++ b/docs/config-catalog.zh.md
 @@ -478,6 +478,11 @@ export interface ConnectionConfig {

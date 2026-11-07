@@ -28,10 +28,10 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
  13 files changed, 229 insertions(+), 18 deletions(-)
 
 diff --git a/docs/config-catalog.md b/docs/config-catalog.md
-index 9b409c6b55..978e02a48e 100644
+index a1423c4bfd..4dd81b281e 100644
 --- a/docs/config-catalog.md
 +++ b/docs/config-catalog.md
-@@ -1872,6 +1872,11 @@ export interface Config {
+@@ -1875,6 +1875,11 @@ export interface Config {
    compressionLevel?: number
    /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
    compressionThresholdBytes?: number
@@ -43,7 +43,7 @@ index 9b409c6b55..978e02a48e 100644
  }
  
  /**
-@@ -1885,6 +1890,21 @@ export interface TlsConfig {
+@@ -1888,6 +1893,21 @@ export interface TlsConfig {
    /** Private key file for the chain's leaf certificate; unencrypted PEM. */
    keyFile: string
  }
@@ -66,10 +66,10 @@ index 9b409c6b55..978e02a48e 100644
  <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
  
 diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
-index 25094e00e3..e64a885032 100644
+index adf1f1ef02..3fc583b03a 100644
 --- a/docs/config-catalog.zh.md
 +++ b/docs/config-catalog.zh.md
-@@ -1874,6 +1874,11 @@ export interface Config {
+@@ -1877,6 +1877,11 @@ export interface Config {
    compressionLevel?: number
    /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
    compressionThresholdBytes?: number
@@ -81,7 +81,7 @@ index 25094e00e3..e64a885032 100644
  }
  
  /**
-@@ -1887,6 +1892,21 @@ export interface TlsConfig {
+@@ -1890,6 +1895,21 @@ export interface TlsConfig {
    /** Private key file for the chain's leaf certificate; unencrypted PEM. */
    keyFile: string
  }
@@ -195,10 +195,10 @@ index 88bbae54a5..b9b44cce2c 100644
  
  <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index c0ae7077d9..f0882b4145 100644
+index d751fcc462..fad038a891 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
-@@ -167,7 +167,8 @@
+@@ -171,7 +171,8 @@
      # by the web-runtime row below through the fallback seat. Routing and
      # browser-facing asset paths do not depend on the advertised URL, which the
      # web-runtime row owns; Connection reads trust authorities from webStartup.
@@ -208,7 +208,7 @@ index c0ae7077d9..f0882b4145 100644
      - id: webserver
        name: '@deepseek-ai/dsh-host-webserver'
        inject: [webStartup]
-@@ -175,6 +176,10 @@
+@@ -179,6 +180,10 @@
          host: !!js ctx.webStartup.host ?? '127.0.0.1'
          port: !!js ctx.webStartup.port ?? 3080
          tls: !!js ctx.webStartup.tls
@@ -569,5 +569,4 @@ index 783b0c86dc..4d3572d3c7 100644
      // whose await carries the schema error rather than rejecting loader.await().
 -- 
 2.53.0
-
 
