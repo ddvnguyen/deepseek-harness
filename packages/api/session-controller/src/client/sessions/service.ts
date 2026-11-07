@@ -409,6 +409,10 @@ export class ClientSessions implements ISessions {
     this.manager.handleSessionStatus(...args)
   }
 
+  /**
+   * Apply one remotely forwarded external-writer liveness change.
+   * @param args - Session identity and external writer state.
+   */
   handleExternalWriterStatus(...args: Parameters<SessionManager['handleExternalWriterStatus']>): void {
     this.manager.handleExternalWriterStatus(...args)
   }

@@ -114,6 +114,46 @@ async function setup(
   return { ctx, transport, statuses, probes }
 }
 describe('external-writer follow tail', () => {
+  it('does not poll an external lease while following a live local session', async () => {
+    const header: SessionHeader = {
+      version: SESSION_FORMAT_VERSION,
+      id: sid('local-live'),
+      createdAt: 1,
+      cwd: '/proj',
+      isSeeded: false,
+      externalOwner: 'bridge-a',
+    }
+    const store: ExternalStore = {
+      header,
+      events: [],
+      revision: 'r1',
+      liveWriter: true,
+      owner: 'bridge-a',
+    }
+    const { ctx, transport, statuses, probes } = await setup(store)
+    const session = ctx.sessions.create(header.id, { meta: { cwd: '/proj' } })
+    const abort = new AbortController()
+    const iterator = transport.follow({ address: { kind: 'session', sessionId: header.id } }, abort.signal)
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({
+      done: false,
+      value: { type: 'snapshot' },
+    })
+
+    const next = iterator.next()
+    session.append('turn/start', { turn: 1 })
+    await expect(next).resolves.toMatchObject({
+      done: false,
+      value: { type: 'event', event: { type: 'turn/start' } },
+    })
+    expect(probes.n).toBe(0)
+    expect(statuses).toEqual([])
+
+    abort.abort()
+    await expect(iterator.next()).resolves.toMatchObject({ done: true })
+    await ctx.fiber.dispose()
+  })
+
   it('delivers external appends live, reports the liveness bit, and settles the interrupted closers on death', async () => {
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION,

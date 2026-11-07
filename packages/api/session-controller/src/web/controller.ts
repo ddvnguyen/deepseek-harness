@@ -46,6 +46,7 @@ export class WebController {
         throw error
       })
     validateObservationAddress(request.address, observation)
+    const followsExternalOwner = observation.source === 'prepared'
     const snapshotRevision = observation.revision
     let opening: SessionFollowFrame = {
       type: 'snapshot',
@@ -76,6 +77,10 @@ export class WebController {
       observation[Symbol.dispose]()
     }
     yield opening
+    if (!followsExternalOwner) {
+      yield* queue.items()
+      return
+    }
     const tailAbort = new AbortController()
     const abortTail = (): void => { tailAbort.abort(signal.reason) }
     signal.addEventListener('abort', abortTail, { once: true })
@@ -108,6 +113,7 @@ export class WebController {
     let running = false
     let initialized = false
     while (!signal.aborted) {
+      if (this.ctx.sessions.get(sessionId) !== undefined) return
       try {
         const probe = await persistence.writeLease(sessionId, { signal })
         const snapshot = await persistence.stat(sessionId, { signal })

@@ -74,7 +74,9 @@ export class EventListener implements Disposable {
     this.nextExpectedSeq = cursor + 1
   }
 
-  /** Append externally persisted events through the same sequence check as local notifications. */
+  /** Append externally persisted events through the same sequence check as local notifications.
+   * @param events - Persisted events to append to the notification buffer.
+   */
   appendExternal(events: readonly SessionEvent[]): void {
     for (const event of events) this.input.append({ type: 'external', event })
   }
