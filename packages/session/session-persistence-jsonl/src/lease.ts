@@ -255,7 +255,7 @@ export async function externalWriterLeaseProbe(
   if (held !== undefined) {
     const { pid, owner } = held
     if (pid > 0 && pid <= OWNER_PID_MAX) {
-      const ownerRecord = owner === undefined ? {} : { owner }
+      const ownerRecord = { processId: pid, ...(owner === undefined ? {} : { owner }) }
       if (pid === process.pid) return { running: true, ...ownerRecord }
       try {
         process.kill(pid, 0)

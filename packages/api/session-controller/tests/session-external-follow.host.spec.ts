@@ -47,6 +47,7 @@ interface ExternalStore {
   revision: string
   liveWriter: boolean
   owner: string | null
+  processId?: number
 }
 
 /** Persistence double serving one session's evolving store, with the countable probe. */
@@ -85,7 +86,8 @@ function provideExternalPersistence(
       hooks.probes?.(probes)
       probes.n += 1
       if (!store.liveWriter) return Promise.resolve(undefined)
-      return Promise.resolve(store.owner === null ? { running: true } : { running: true, owner: store.owner })
+      return Promise.resolve({ running: true, ...(store.processId === undefined ? {} : { processId: store.processId }),
+        ...(store.owner === null ? {} : { owner: store.owner }) })
     },
   }
   ctx.provide('sessionPersistence', persistence as never)
@@ -151,6 +153,35 @@ describe('external-writer follow tail', () => {
 
     abort.abort()
     await expect(iterator.next()).resolves.toMatchObject({ done: true })
+    await ctx.fiber.dispose()
+  })
+
+  it('does not label a prepared writer in this process as external', async () => {
+    const header: SessionHeader = {
+      version: SESSION_FORMAT_VERSION,
+      id: sid('same-process-writer'),
+      createdAt: 1,
+      cwd: '/proj',
+      isSeeded: false,
+    }
+    const store: ExternalStore = {
+      header,
+      events: [],
+      revision: 'r1',
+      liveWriter: true,
+      owner: null,
+      processId: process.pid,
+    }
+    const { ctx, transport, statuses, probes } = await setup(store)
+    const abort = new AbortController()
+    const iterator = transport.follow({ address: { kind: 'session', sessionId: header.id } }, abort.signal)
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot' } })
+    const pending = iterator.next()
+    await expect.poll(() => probes.n).toBeGreaterThan(0)
+    expect(statuses).toEqual([])
+    abort.abort()
+    await expect(pending).resolves.toMatchObject({ done: true })
     await ctx.fiber.dispose()
   })
 

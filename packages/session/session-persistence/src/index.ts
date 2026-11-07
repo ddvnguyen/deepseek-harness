@@ -48,13 +48,16 @@ export {
  * Best-effort liveness answer for one stored session's cross-process write
  * lease. `running` means a write owner plausibly still holds the lease right
  * now (the probe never proves exit: see {@link SessionPersistence.writeLease});
- * `owner` carries the holder's opaque label when the holder recorded one.
+ * `owner` carries the holder's opaque label when the holder recorded one;
+ * `processId` identifies the holder when its durable record has a valid PID.
  */
 export interface SessionExternalWriterProbe {
   /** Whether a write owner plausibly still holds the session's lease. */
   readonly running: boolean
   /** Opaque owner label the holder recorded (for example an external bridge), when present. */
   readonly owner?: string
+  /** PID from the holder record, when present and valid. */
+  readonly processId?: number
 }
 
 /** Options for {@link SessionPersistence.writeLease}. */

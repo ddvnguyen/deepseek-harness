@@ -255,7 +255,8 @@ export class SessionManager {
       const summary = this.summaries.find(s => s.sessionId === sessionId)
       if (summary !== undefined) {
         session.handleBlank(this.effectiveBlank(summary))
-        session.handleRunning(summary.running)
+        if (summary.agentAvailable) session.handleRunning(summary.running)
+        else session.handleExternalWriterStatus(summary.running)
       } else {
         const address = this.addresses.get(sessionId)
         const child = address === undefined ? undefined : this.projectionStores.get(address.parentSessionId)?.values().subagentCatalog
@@ -437,7 +438,7 @@ export class SessionManager {
             if (mutation.kind === 'remove') removedSincePull.add(mutation.sessionId)
           }
           for (const s of baseline) {
-            if (s.running && !removedSincePull.has(s.sessionId)) this.engagedSessions.add(s.sessionId)
+            if (s.running && s.agentAvailable && !removedSincePull.has(s.sessionId)) this.engagedSessions.add(s.sessionId)
           }
           const summaries = mutations.reduce(applyMutation, baseline)
           this.summaries = summaries
@@ -452,7 +453,8 @@ export class SessionManager {
             const session = this.sessions.get(s.sessionId)
             if (session === undefined) continue
             session.handleBlank(this.effectiveBlank(s))
-            session.handleRunning(s.running)
+            if (s.agentAvailable) session.handleRunning(s.running)
+            else session.handleExternalWriterStatus(s.running)
           }
           // Land each row's projection block in the per-session value store
           // (cold titles surface without opening the session). A list block is
@@ -672,7 +674,7 @@ export class SessionManager {
    */
   handleSessionAdded(summary: SessionSummary): void {
     this.mergeSummary(summary)
-    if (!this.disposed && summary.running) this.engagedSessions.add(summary.sessionId)
+    if (!this.disposed && summary.running && summary.agentAvailable) this.engagedSessions.add(summary.sessionId)
     this.sessions.get(summary.sessionId)?.handleBlank(this.effectiveBlank(summary))
     if (summary.projections !== undefined) this.applyListBlock(summary.sessionId, summary.projections)
   }
@@ -751,7 +753,7 @@ export class SessionManager {
    */
   handleExternalWriterStatus(sessionId: SessionId, running: boolean): void {
     this.recordMutation({ kind: 'status', sessionId, running, agentAvailable: false })
-    this.sessions.get(sessionId)?.handleRunning(running)
+    this.sessions.get(sessionId)?.handleExternalWriterStatus(running)
   }
 
   /**
@@ -877,11 +879,13 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
     case 'remove':
       return summaries.filter(summary => summary.sessionId !== mutation.sessionId)
     case 'status':
-      // Running converts display state; it does not establish durable history.
+      // A local Agent running frame implies an accepted turn. An external
+      // lease can precede the first durable event, so it only changes liveness.
       return summaries.map(summary => summary.sessionId === mutation.sessionId
         && (summary.running !== mutation.running
-          || summary.agentAvailable !== mutation.agentAvailable || (mutation.running && summary.blank))
-        ? { ...summary, running: mutation.running, agentAvailable: mutation.agentAvailable, blank: summary.blank && !mutation.running }
+          || summary.agentAvailable !== mutation.agentAvailable || (mutation.running && mutation.agentAvailable && summary.blank))
+        ? { ...summary, running: mutation.running, agentAvailable: mutation.agentAvailable,
+          blank: summary.blank && !(mutation.running && mutation.agentAvailable) }
         : summary)
     case 'activity':
       return summaries.map(summary => summary.sessionId === mutation.sessionId

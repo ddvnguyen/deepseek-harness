@@ -111,6 +111,26 @@ describe('SessionManager instances', () => {
     expect(manager.getListSnapshot().items[0]?.blank).toBe(false)
   })
 
+  it('keeps an externally running blank Session blank until durable history arrives', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    remote.session.list.mockResolvedValueOnce(ok({ items: [summary(S1, {
+      blank: true, running: true, agentAvailable: false,
+    })] }))
+
+    await manager.refreshList()
+    const session = manager.get(S1)
+
+    expect(manager.getListSnapshot().items[0]).toMatchObject({
+      blank: true, running: true,
+    })
+    expect(session.getSnapshot()).toMatchObject({ blank: true, running: true })
+
+    manager.handleExternalWriterStatus(S1, false)
+    expect(manager.getListSnapshot().items[0]).toMatchObject({ blank: true, running: false })
+    expect(session.getSnapshot()).toMatchObject({ blank: true, running: false })
+  })
+
   it('retains running for a row added during a pull whose baseline omits it', async ({ mock, remote }) => {
     const manager = makeManager(mock, remote)
     onTestFinished(() => manager.dispose())

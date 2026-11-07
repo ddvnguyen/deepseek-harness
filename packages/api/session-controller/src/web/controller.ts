@@ -117,7 +117,10 @@ export class WebController {
       try {
         const probe = await persistence.writeLease(sessionId, { signal })
         const snapshot = await persistence.stat(sessionId, { signal })
-        const probeRunning = probe?.running === true
+        // A prepared observation may be backed by a writer in this Host
+        // process. That writer is local even when it has not been attached to
+        // `ctx.sessions`; only another PID is an external-owner status.
+        const probeRunning = probe?.running === true && probe.processId !== process.pid
         const changed = snapshot?.revision !== revision
         const transitioned = probeRunning !== running
         if (changed || transitioned) {
