@@ -83,7 +83,8 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
     catalog: { getSnapshot: () => SHORTCUT_CATALOG, subscribe: () => () => {} }, ...shortcuts } as never)
   ctx.provide('layout', layout as never)
   ctx.provide('resources', resources as never)
-  ctx.provide('sessions', { retain: vi.fn(() => ({ ready: Promise.resolve(), release: vi.fn() })) } as never)
+  const sessions = { retain: vi.fn(() => ({ ready: Promise.resolve(), release: vi.fn() })) }
+  ctx.provide('sessions', sessions as never)
   ctx.provide('uiSession', { adapter: { current } } as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
@@ -96,7 +97,7 @@ async function boot(shortcuts: Partial<Shortcuts> = {}) {
     if (entry.inject === undefined) throw new Error(`expected ${entry.name} to inject`)
     return entry.inject(SESSION)
   }
-  return { ctx, menus, slots, registered, dictionaries, layout, current, resources, fiber, seat, injectedOf }
+  return { ctx, menus, slots, registered, dictionaries, layout, current, resources, sessions, fiber, seat, injectedOf }
 }
 
 describe('ui-sidebar-right apply', () => {
@@ -166,6 +167,93 @@ describe('ui-sidebar-right apply', () => {
     expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
     current.set({ key: undefined })
     expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+  })
+
+  it('hosts a main panel so the column stays beside it until the last claim is released', async () => {
+    const { ctx, layout, current } = await boot()
+    current.set({ key: SESSION })
+    layout.panelInfo.set({ activePanelId: 'mmx' })
+    // A panel nobody hosts behaves exactly as before, commands included.
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    expect(() => { ctx.sidebarRight.toggleExpanded() }).toThrow('no session surface is mounted')
+    const release = ctx.sidebarRight.hostPanel('mmx')
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    // A second host of the same panel outlives the first one's disposer.
+    const second = ctx.sidebarRight.hostPanel('mmx')
+    release()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    second()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    // A claim on another panel leaves this one unhosted.
+    const elsewhere = ctx.sidebarRight.hostPanel('other')
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    layout.panelInfo.set({ activePanelId: 'other' })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    elsewhere()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    // The Conversation is unchanged by any claim.
+    layout.panelInfo.set({ activePanelId: null })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+  })
+
+  it('shows the Session a plugin named while its panel hosts the column', async () => {
+    const { ctx, layout, current, sessions } = await boot()
+    const OTHER = 's-other' as SessionId
+    current.set({ key: SESSION })
+    const releaseHost = ctx.sidebarRight.hostPanel('mmx')
+    const releaseName = ctx.sidebarRight.selectHostedSession(OTHER)
+    // Naming a Session does not move the column while the Conversation is on screen.
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    layout.panelInfo.set({ activePanelId: 'mmx' })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(OTHER)
+    // The render targets follow the name, so the column has the Session to draw.
+    expect(sessions.retain).toHaveBeenCalledWith(OTHER, { source: 'sidebarView' })
+    // Withdrawing the name returns the column to the selection.
+    releaseName()
+    expect(ctx.sidebarRight.hostedSession.getSnapshot()).toBeUndefined()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    // The last name wins, and withdrawing an older one leaves the newer
+    // standing — a plugin that re-targets does not have to order its teardown.
+    const older = ctx.sidebarRight.selectHostedSession(OTHER)
+    const SECOND = 's-second' as SessionId
+    const newer = ctx.sidebarRight.selectHostedSession(SECOND)
+    older()
+    expect(ctx.sidebarRight.hostedSession.getSnapshot()).toBe(SECOND)
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SECOND)
+    // A disposer that runs twice withdraws nothing twice, and a released host
+    // withdraws the column whatever the name said.
+    newer()
+    newer()
+    expect(ctx.sidebarRight.hostedSession.getSnapshot()).toBeUndefined()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+    releaseHost()
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBeUndefined()
+    // The Conversation's own selection never changed.
+    layout.panelInfo.set({ activePanelId: null })
+    expect(ctx.sidebarRight.mounted.getSnapshot()).toBe(SESSION)
+  })
+
+  it('publishes whether the on-screen column is expanded', async () => {
+    const { ctx, layout, current, seat } = await boot()
+    const handle = seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
+    const instance = handle.create(SESSION)
+    // No Session on screen, nothing to read.
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(false)
+    current.set({ key: SESSION })
+    instance.actions.setExpanded(SESSION, true)
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(true)
+    expect(ctx.sidebarRight.isExpanded()).toBe(true)
+    // A hosted panel keeps the Session on screen, so the reading holds.
+    const release = ctx.sidebarRight.hostPanel('mmx')
+    layout.panelInfo.set({ activePanelId: 'mmx' })
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(true)
+    // Losing the last claim withdraws the Session without touching its state.
+    release()
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(false)
+    layout.panelInfo.set({ activePanelId: null })
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(true)
+    instance.actions.setExpanded(SESSION, false)
+    expect(ctx.sidebarRight.expanded.getSnapshot()).toBe(false)
   })
 
   it('hands the panel seat the frame report, the room rule, the opens, the observable registry, and the Tab domain', async () => {
