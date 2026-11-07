@@ -8,7 +8,11 @@ import css from './SidebarRight.module.css'
 
 /** Root-only retained Session targets and their committed mount lifetimes. */
 export interface RightbarRootInjected {
-  readonly hooks: { readonly views: HostObservable<readonly SidebarSessionViewSnapshot[]> }
+  readonly hooks: {
+    readonly views: HostObservable<readonly SidebarSessionViewSnapshot[]>
+    /** The global `main` panels a plugin hosts the column beside. */
+    readonly hostedPanels: HostObservable<ReadonlySet<string>>
+  }
   readonly mountView: (reference: SessionReference) => () => void
 }
 
@@ -28,11 +32,18 @@ function SessionView({ view, visible, SessionProvider, renderSlot, mountView, wi
 
 /**
  * Keep independent Session subtrees and hide those outside the selected Conversation.
+ *
+ * The column is visible while the Conversation fills the main column, and while
+ * a global panel that hosts it does: a plugin opts a panel in through
+ * `ctx.sidebarRight.hostPanel`, and both this gate and the service's on-screen
+ * Session read that one set.
  * @param props - frame geometry, view targets and the authorized Session renderer.
  * @returns the foreground and retained background Sidebars.
  */
-export function RightbarRoot({ usePanelInfo, useViews, ...props }: RootProps) {
-  const visible = usePanelInfo(info => info.activePanelId === null)
+export function RightbarRoot({ usePanelInfo, useViews, useHostedPanels, ...props }: RootProps) {
+  const activePanelId = usePanelInfo(info => info.activePanelId)
+  const hostedPanels = useHostedPanels(value => value)
+  const visible = activePanelId === null || hostedPanels.has(activePanelId)
   const views = useViews(value => value)
   return <>{views.map(view => <SessionView key={view.sessionId} {...props} view={view} visible={visible} />)}</>
 }
