@@ -163,6 +163,9 @@ export class ApiSessionList {
         yieldDeadline = performance.now() + this.workSliceMs
       }
     }
+    // Cold summaries are fully synchronous: the external-writer lease arrives
+    // inside the listing record (the backend probes beside the artifact it
+    // resolves), so a probe-less or a lease-reporting backend costs the same.
     for (const record of cold) {
       signal?.throwIfAborted()
       items.push(this.summarizeCold(record))
@@ -177,7 +180,13 @@ export class ApiSessionList {
     return items
   }
 
-  private summarizeCold({ header, formatStatus }: SessionRecord): SessionSummary {
+  /**
+   * Build one cold-persisted Session summary. The record's lease probe
+   * (reported beside the artifact in the listing) settles the `running` bit:
+   * a live external writer keeps a cold row running even though this process
+   * never hosted its Agent.
+   */
+  private summarizeCold({ header, formatStatus, lease }: SessionRecord): SessionSummary {
     const projections = this.projectionsFor(header, undefined)
     const metadata = projections?.values.sessionListMetadata
     return {
@@ -185,7 +194,7 @@ export class ApiSessionList {
       updatedAt: updatedAt(header, metadata),
       agentAvailable: false,
       ...(formatStatus === undefined ? {} : { formatStatus }),
-      running: false,
+      running: lease?.running === true,
       // A large, metadata-less, or inaccessible cache miss remains unknown and visible.
       blank: metadata?.blank ?? false,
       ...listFields(header),
@@ -373,10 +382,12 @@ function listFields(header: SessionHeader): {
   readonly parentSessionId?: SessionId
   readonly origin?: 'subagent'
   readonly cwd?: string
+  readonly externalOwner?: string
 } {
   return {
     ...(header.parentSession === undefined ? {} : { parentSessionId: header.parentSession }),
     ...(header.origin === undefined ? {} : { origin: header.origin }),
     ...(header.cwd === undefined ? {} : { cwd: header.cwd }),
+    ...(header.externalOwner === undefined ? {} : { externalOwner: header.externalOwner }),
   }
 }
