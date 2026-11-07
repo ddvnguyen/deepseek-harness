@@ -451,6 +451,14 @@ jobs:
         if: vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]'
         run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium webkit
 
+      # The failover VM image lacks libwoff1, so WebKit cannot launch
+      # (libwoff2dec.so.1.0.2). There is no passwordless sudo on the
+      # self-hosted runner, so place the pinned payload on the browser
+      # bundle's library path instead of mutating the host with apt.
+      - name: Provide WebKit libwoff2 runtime on the failover VM
+        if: vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]'
+        run: bash scripts/prepare-ci-webkit-woff.sh
+
       - name: Build and execute the Linux Office runtime
         run: CI=true pnpm run prepare:primary-runtime --target linux-x64 --output "$RUNNER_TEMP/office-runtime" --cache "$RUNNER_TEMP/office-runtime-downloads"
 

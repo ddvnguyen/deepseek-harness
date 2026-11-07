@@ -176,6 +176,12 @@ jobs:
       - name: Install Playwright Chromium and WebKit
         run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium webkit
 
+      # Same libwoff1 gap as the PR snapshots job: the VM image lacks
+      # libwoff2dec.so.1.0.2 and self-hosted runners have no
+      # passwordless sudo, so use the pinned-payload script instead.
+      - name: Provide WebKit libwoff2 runtime
+        run: bash scripts/prepare-ci-webkit-woff.sh
+
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
 
