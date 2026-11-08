@@ -82,7 +82,10 @@ export async function verifyPayload(directory: string): Promise<ArtifactManifest
   for (const file of manifest.files) {
     const path = join(directory, file.path)
     if (await fileDigest(path) !== file.sha256) throw new Error(`SSH helper payload digest differs: ${file.path}`)
-    if (((await lstat(path)).mode & 0o777) !== file.mode) throw new Error(`SSH helper payload permissions differ: ${file.path}`)
+    // Portable tar archives normalize file modes (see node-tar modeFix), so compare the
+    // portable-normalized modes to avoid umask/mode drift between source and extracted payload.
+    const portableMode = (mode: number) => (mode | 0o600) & ~0o22
+    if (portableMode((await lstat(path)).mode & 0o777) !== portableMode(file.mode)) throw new Error(`SSH helper payload permissions differ: ${file.path}`)
   }
   return manifest
 }

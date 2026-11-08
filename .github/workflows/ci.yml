@@ -375,6 +375,7 @@ jobs:
         # Ephemeral runner images can carry Ubuntu mirrors whose HTTP endpoints are unreachable.
         run: |
           sudo find /etc/apt -maxdepth 2 -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i -E 's@http://([a-z]{2}\.)?archive\.ubuntu\.com/ubuntu@https://archive.ubuntu.com/ubuntu@g; s@http://security\.ubuntu\.com/ubuntu@https://security.ubuntu.com/ubuntu@g' {} +
+          sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libmanette-0.2-0
           pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium webkit
 
       # The persistent VM image owns Playwright's Linux system packages; do
@@ -382,6 +383,13 @@ jobs:
       - name: Install Playwright Chromium and WebKit on the failover VM
         if: vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]'
         run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium webkit
+
+      # The failover VM image lacks libmanette, so WebKit cannot launch.
+      # There is no passwordless sudo on the self-hosted runner, so place
+      # the pinned payload on the browser bundle's library path instead.
+      - name: Provide WebKit libmanette runtime on the failover VM
+        if: vars.DSH_CI_FAILOVER_LINUX == 'selfhosted' && github.event.pull_request.user.login != 'dependabot[bot]'
+        run: bash scripts/prepare-ci-webkit-manette.sh
 
       - name: Build and execute the Linux Office runtime
         run: CI=true pnpm run prepare:primary-runtime --target linux-x64 --output "$RUNNER_TEMP/office-runtime" --cache "$RUNNER_TEMP/office-runtime-downloads"
