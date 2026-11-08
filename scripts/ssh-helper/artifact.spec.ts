@@ -1,4 +1,4 @@
-import { cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { create as createTar } from 'tar'
@@ -15,6 +15,10 @@ async function fixture() {
   await mkdir(join(payload, 'native/system'), { recursive: true })
   await writeFile(join(payload, 'dsh-ssh-helper'), 'fixture executable')
   await writeFile(join(payload, 'native/system/package.json'), '{}')
+  // Pin standard (non-group-writable) modes so tar's portable extraction
+  // (which strips group/other write bits) preserves them under any umask.
+  await chmod(join(payload, 'dsh-ssh-helper'), 0o644)
+  await chmod(join(payload, 'native/system/package.json'), 0o644)
   const metadata = {
     format: 1, version: '1.0.0', commit: 'a'.repeat(40), dirty: false,
     target: 'node24-linux-x64', protocol: 2, nodeVersion: 'v24.1.0',
