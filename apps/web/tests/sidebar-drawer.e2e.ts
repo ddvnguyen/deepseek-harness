@@ -184,15 +184,44 @@ async function assertMaskFade(frame: Locator, from: number, to: number): Promise
   })
 }
 
-/** Sample both width transitions on the same clock to detect detached sidebar controls. */
-async function assertFoldResize(toggle: Locator, from: number, to: number): Promise<void> {
-  await expect.poll(() => toggle.evaluate((button, target) => {
-    const frame = button.closest<HTMLElement>('[data-animating]')
-    return frame !== null && parseFloat(frame.style.gridTemplateColumns) === target && frame.getAnimations().some(animation =>
-      animation instanceof CSSTransition && animation.transitionProperty === 'grid-template-columns')
-  }, to)).toBe(true)
-  const sample = await toggle.evaluate((button) => {
-    const frame = button.closest<HTMLElement>('[data-animating]')!
+/** Track widths and toggle gaps sampled at the start and midpoint of one fold resize. */
+interface FoldResizeSample {
+  endpoints: number[]
+  start: { width: number; gap: number }
+  middle: { width: number; gap: number }
+}
+
+/**
+ * Sample both width transitions on the same clock to detect detached sidebar controls.
+ *
+ * The frame drops `data-animating` 600 ms after the toggle that resizes it, so the
+ * sampler has to observe the running transitions before that settle fires. Waiting
+ * inside the page reads the first animated frame directly; a Node-side poll spends
+ * that window on round trips and loses the resize on a loaded runner.
+ *
+ * @param toggle - collapse control whose frame carries the track transitions.
+ * @param to - settled leading-column width the resize must reach.
+ * @returns the sampled endpoints, and the start and midpoint track widths and gaps.
+ */
+function sampleFoldResize(toggle: Locator, to: number): Promise<FoldResizeSample> {
+  return toggle.evaluate(async (button, target) => {
+    const deadline = performance.now() + 5_000
+    const frame = await new Promise<HTMLElement>((resolve, reject) => {
+      const check = (): void => {
+        const candidate = button.closest<HTMLElement>('[data-animating]')
+        if (candidate !== null && parseFloat(candidate.style.gridTemplateColumns) === target && candidate.getAnimations().some(animation =>
+          animation instanceof CSSTransition && animation.transitionProperty === 'grid-template-columns')) {
+          resolve(candidate)
+          return
+        }
+        if (performance.now() > deadline) {
+          reject(new Error('Fold width transition did not start'))
+          return
+        }
+        requestAnimationFrame(check)
+      }
+      check()
+    })
     const transitions = frame.getAnimations({ subtree: true }).filter((animation): animation is CSSTransition =>
       animation instanceof CSSTransition && ['grid-template-columns', 'width'].includes(animation.transitionProperty))
     const grid = transitions.find(animation => animation.transitionProperty === 'grid-template-columns')
@@ -211,7 +240,23 @@ async function assertFoldResize(toggle: Locator, from: number, to: number): Prom
     for (const transition of transitions) transition.finish()
     frame.style.removeProperty('--ds-transition-duration-slow')
     return { endpoints: [start.width, end.width], start, middle }
-  })
+  }, to)
+}
+
+/**
+ * Run the trigger that resizes the tracks and assert the fold resize it starts.
+ *
+ * @param toggle - collapse control whose frame carries the track transitions.
+ * @param from - leading-column width the frame starts at.
+ * @param to - leading-column width the resize must settle at.
+ * @param trigger - action that produces the resize; it runs after sampling is armed.
+ */
+async function assertFoldResize(toggle: Locator, from: number, to: number, trigger: () => Promise<void>): Promise<void> {
+  const sampling = sampleFoldResize(toggle, to)
+  // The sample outlives a failed trigger, so keep its rejection from surfacing as unhandled.
+  sampling.catch(() => undefined)
+  await trigger()
+  const sample = await sampling
   expect(sample.endpoints).toEqual([from, to])
   expect(sample.middle.width).toBeGreaterThan(Math.min(from, to))
   expect(sample.middle.width).toBeLessThan(Math.max(from, to))
@@ -489,15 +534,15 @@ it('overlays the conversation and closes after navigation without losing its sid
         const wideFrame = page.locator('[data-rightbar-collapsed]')
         const collapseSidebar = page.getByRole('button', { name: 'Collapse sidebar', exact: true })
         await wideFrame.evaluate((el) => { el.style.setProperty('--ds-transition-duration-slow', '100s') })
-        await posture.send('Emulation.clearDevicePostureOverride')
-        await assertFoldResize(collapseSidebar, 475.5, 280)
+        await assertFoldResize(collapseSidebar, 475.5, 280,
+          async () => { await posture.send('Emulation.clearDevicePostureOverride') })
         await expect.poll(() => main.boundingBox()).toEqual({ x: 280, y: 0, width: 671, height: 669 })
         expect(await page.locator('[data-side="sidebar"]').count()).toBe(1)
         expect(await foldSearch.evaluate(el => el === document.activeElement)).toBe(true)
         expect(await foldSearch.inputValue()).toBe('fold search')
         await wideFrame.evaluate((el) => { el.style.setProperty('--ds-transition-duration-slow', '100s') })
-        await posture.send('Emulation.setDevicePostureOverride', { posture: { type: 'folded' } })
-        await assertFoldResize(collapseSidebar, 280, 475.5)
+        await assertFoldResize(collapseSidebar, 280, 475.5,
+          async () => { await posture.send('Emulation.setDevicePostureOverride', { posture: { type: 'folded' } }) })
         await expect.poll(async () => (await main.boundingBox())?.x).toBe(475.5)
         expect(await foldSearch.evaluate(el => el === document.activeElement)).toBe(true)
         await page.emulateMedia({ reducedMotion: 'reduce' })

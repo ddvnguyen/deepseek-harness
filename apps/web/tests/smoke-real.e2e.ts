@@ -621,7 +621,11 @@ describe('dsh web keyless CLI smoke', () => {
       request.setEncoding('utf8')
       request.on('data', (chunk: string) => { body += chunk })
       request.on('end', () => {
-        resolveProviderRequest(JSON.parse(body) as PtcModeProviderRequest)
+        const parsed = JSON.parse(body) as PtcModeProviderRequest
+        // The session-title request dispatches alongside the first turn and
+        // carries no tools, so only this request's own messages identify which
+        // request the executor assertions are about.
+        if (!JSON.stringify(parsed.messages ?? null).includes(TITLE_PROMPT_MARKER)) resolveProviderRequest(parsed)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
         response.end(messagesResponse('done'))
       })
