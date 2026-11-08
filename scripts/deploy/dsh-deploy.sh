@@ -278,13 +278,21 @@ check_host_codes() { # $1 = the host_codes line, $2 = accepted trusted code(s) (
 
 # --- 0. preflight -----------------------------------------------------------
 [ -f "$UNIT_FILE" ] || die "unit file missing: $UNIT_FILE (create it first)"
-# The listen address lives only in the unit. A unit that drifted back to
-# 127.0.0.1 deploys "successfully" and is then unreachable from the LAN, which
-# is exactly how dsh-x looked healthy on localhost while the public hostname
-# refused every request. The lane is meant to be reachable from the internet
-# (behind the perimeter), so the wildcard bind is the contract.
-grep '^ExecStart=' "$UNIT_FILE" | grep -q -- '--host 0\.0\.0\.0' \
-  || die "unit $UNIT_FILE does not bind 0.0.0.0; add --host 0.0.0.0 to ExecStart"
+# The listen address lives only in the unit. Lane x is meant to be reachable
+# from the internet (behind the perimeter), so the wildcard bind is its
+# contract: a unit that drifted back to 127.0.0.1 deploys "successfully" and
+# is then unreachable from the LAN, which is exactly how dsh-x looked healthy
+# on localhost while the public hostname refused every request. Lane z sits
+# behind 127.0.0.1 by design, so for z the preflight only requires that the
+# unit states its bind address. Only ExecStart= lines count: a comment that
+# mentions --host 0.0.0.0 must not satisfy this check.
+if [ "$TARGET" = "x" ]; then
+  grep '^ExecStart=' "$UNIT_FILE" | grep -q -- '--host 0\.0\.0\.0' \
+    || die "unit $UNIT_FILE does not bind 0.0.0.0; add --host 0.0.0.0 to ExecStart"
+else
+  grep '^ExecStart=' "$UNIT_FILE" | grep -q -- '--host\( \|$\)' \
+    || die "unit $UNIT_FILE states no --host in ExecStart"
+fi
 [ -f "$REPO_ROOT/apps/cli/lib/bin.js" ] || die "no built apps/cli/lib/bin.js in $REPO_ROOT — run the build step first"
 [ -d "$HARNESS_ROOT/.git" ] || die "harness checkout missing: $HARNESS_ROOT"
 case "$PORT" in 3080|3081|8099|8110|18081|18789|4097|8210) die "refusing to use protected port $PORT";;
