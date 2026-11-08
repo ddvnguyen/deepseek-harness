@@ -8364,7 +8364,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionExternalWriterProbe',
-    declaration: 'export interface SessionExternalWriterProbe {\n    readonly running: boolean;\n    readonly owner?: string;\n}',
+    declaration: 'export interface SessionExternalWriterProbe {\n    readonly running: boolean;\n    readonly owner?: string;\n    readonly processId?: number;\n}',
   },
   {
     name: 'SessionFeedbackRecordRequest',
