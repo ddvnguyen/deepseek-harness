@@ -93,20 +93,23 @@ function bytesBody(bytes: Uint8Array): ReadableStream<Uint8Array> {
 async function serveStatic(
   request: Request, distRoot: string, distIndex: string,
   authorizeIndex: () => Response | undefined,
-  renderIndex: (html: string) => string,
+  renderIndex: (html: string, base?: string) => string,
 ): Promise<Response> {
   const target = resolve(normalize(join(distRoot, decodeURIComponent(new URL(request.url).pathname))))
   // Traversal rejection: the target must be distRoot itself (`/`) or stay under
   // it. `sep`, not '/': resolve() emits backslash paths on Windows, where a '/'
   // suffix would reject every legitimate subpath as traversal.
   if (target !== distRoot && !target.startsWith(distRoot + sep)) return new Response(null, { status: 403 })
+  const requestPathname = decodeURIComponent(new URL(request.url).pathname)
+  const taskEntry = /^\/task\/[^/]+\/?$/.test(requestPathname)
+  const isIndex = target === distRoot || target === distIndex || taskEntry
   let body: string | Uint8Array<ArrayBuffer>
   let headers: Record<string, string>
   try {
-    if (target === distRoot || target === distIndex) {
+    if (isIndex) {
       const refusal = authorizeIndex()
       if (refusal !== undefined) return refusal
-      body = renderIndex(await readFile(distIndex, 'utf8'))
+      body = renderIndex(await readFile(distIndex, 'utf8'), taskEntry ? '../' : './')
       headers = { 'content-type': HTML_MIME }
     } else {
       body = await readFile(target)
@@ -159,9 +162,9 @@ export function apply(ctx: Context, config: Config): void {
       () => peer === undefined ? authorizeIndex(request) : undefined,
       // The browser authentication admits the owner's shared browser Peer. The
       // base goes in after all index transforms, so it precedes every resource
-      // reference they insert.
-      html => ctx.webServer.renderIndex(html, peer ?? ctx.connection.browserPeer)
-        .replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="./">`),
+      // reference they insert. Per-entry base for /task/<ref> (M-52).
+      (html, base = './') => ctx.webServer.renderIndex(html, peer ?? ctx.connection.browserPeer)
+        .replace(/<head(?:\s[^>]*)?>/i, open => `${open}<base href="${base}">`),
     ),
   }), 'frontend-static: fallback seat')
 }

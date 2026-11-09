@@ -174,6 +174,20 @@ describe('real Loader composition', () => {
     // An authenticated browser renders for the owner's shared browser Peer.
     expect(renderedFor).toEqual([loaded.connection.browserPeer, loaded.connection.browserPeer, loaded.connection.browserPeer])
     offRows()
+
+    // Deep task entry: served as the shell with a per-entry base that resolves
+    // app-owned routes back to the mount (M-52 amendment A1/A2).
+    const deep = await request(port, '/task/abc', authenticated())
+    expect(deep.status).toBe(200)
+    expect(deep.type).toBe('text/html; charset=utf-8')
+    expect(deep.body).toContain('shell')
+    expect(deep.body.match(/<base\b/g)).toHaveLength(1)
+    expect(deep.body).toContain('<base href="../">')
+
+    // Out of scope paths stay 404.
+    expect((await request(port, '/task/abc/extra', authenticated())).status).toBe(404)
+    expect((await request(port, '/task/', authenticated())).status).toBe(404)
+
     expect(await request(port, '/', authenticated({ method: 'HEAD' }))).toEqual({
       status: 200,
       type: 'text/html; charset=utf-8',

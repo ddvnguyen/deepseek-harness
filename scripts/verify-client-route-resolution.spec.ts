@@ -98,6 +98,14 @@ describe('browser app-route guard', () => {
       return [trusted, requested, origin]
     `)).toEqual([])
   })
+
+  it('allows reading a task ref from location.pathname (M-52)', () => {
+    expect(patterns(CLIENT_FILE, `
+      const ref = decodeURIComponent(window.location.pathname.split('/').pop() ?? '')
+      const segments = location.pathname.split('/')
+      return [ref, segments]
+    `)).toEqual([])
+  })
 })
 
 describe('browser-reference producers', () => {
