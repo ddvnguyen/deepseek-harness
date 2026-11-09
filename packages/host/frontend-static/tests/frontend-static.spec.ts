@@ -198,7 +198,7 @@ describe('real Loader composition', () => {
     expect(shadowed.body).not.toContain('SHADOW')
 
     // Trailing-slash form: served as the shell with a deeper per-entry base
-    // (Architect REQUEST CHANGES on 08b402db14).
+    // (Architect REQUEST CHANGES, trailing-slash base).
     const trailing = await request(port, '/task/abc/', authenticated())
     expect(trailing.status).toBe(200)
     expect(trailing.body.match(/<base\b/g)).toHaveLength(1)
