@@ -251,7 +251,10 @@ describe('CI workflow', () => {
       expect(job.steps[0]).toEqual({
         name: 'Use runner-owned temporary storage',
         run: [
-          'echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"',
+          'private_tmp="${{ runner.temp }}/dsh-tmp-${{ github.run_id }}-${{ github.run_attempt }}"',
+          'mkdir -p "$private_tmp"',
+          'chmod 700 "$private_tmp"',
+          'echo "TMPDIR=$private_tmp" >> "$GITHUB_ENV"',
           ...(jobName === 'node-24-consumers'
             ? ['echo "PLAYWRIGHT_BROWSERS_PATH=${RUNNER_TEMP%/*}/ms-playwright" >> "$GITHUB_ENV"']
             : []),
