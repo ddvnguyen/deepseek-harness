@@ -85,6 +85,36 @@ describe.skipIf(MODE === 'record')('web e2e: public mount through a prefix-strip
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('cold-loads a deep task path through the proxy (M-52 A4)', async () => {
+    await page.goto(`${scaffold.baseUrl}task/abc`, { waitUntil: 'load' })
+    await page.waitForSelector('#root', { timeout: 30_000 })
+    const observed = await page.evaluate(async () => {
+      const bundles = Array.from(document.querySelectorAll('script[src]')).map(s => (s as HTMLScriptElement).src)
+      let fetchOk = false
+      try {
+        const r = await fetch('api/session/create', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ type: 'client-request', rpcId: 'deep-task', method: 'session/create', payload: { args: { request: {} } } }),
+        })
+        fetchOk = r.ok
+      } catch { fetchOk = false }
+      return { baseURI: document.baseURI, bundles, fetchOk, title: document.title }
+    })
+    expect(observed.baseURI).toBe(scaffold.baseUrl)
+    expect(observed.bundles.some(u => u.includes('/plugins/'))).toBe(true)
+    expect(observed.fetchOk).toBe(true)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('reloads after an in-page pushState to task/<ref> (M-52 A4)', async () => {
+    await page.evaluate((mount) => { history.pushState(null, '', `${mount}task/abc`) }, MOUNT)
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('#root', { timeout: 30_000 })
+    const baseURI = await page.evaluate(() => document.baseURI)
+    expect(baseURI).toBe(scaffold.baseUrl)
+  }, 60_000)
+
   it('keeps relative fetches under the mount after in-page navigation', async () => {
     const observed = await page.evaluate(async (mount) => {
       const initialUrl = location.href
