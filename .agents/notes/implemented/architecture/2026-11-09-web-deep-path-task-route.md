@@ -10,7 +10,7 @@ The issue view wants a shareable, cold-loadable path (`/task/<ref>`) for an issu
 
 ## Decision
 
-The route is exactly `task/<ref>`: one fixed segment plus one ref segment. It is served as the same document as `/` and `/index.html`, but with a per-entry base:
+The route is `task/<ref>` (optionally one trailing slash): one fixed segment plus one ref segment. A trailing slash uses `<base href="../../">`. It is served as the same document as `/` and `/index.html`, but with a per-entry base:
 
 - `/` and `/index.html` inject `<base href="./">`.
 - `/task/<ref>` injects `<base href="../">`, which resolves app-owned routes back to the mount.

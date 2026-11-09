@@ -109,7 +109,7 @@ async function serveStatic(
     if (isIndex) {
       const refusal = authorizeIndex()
       if (refusal !== undefined) return refusal
-      body = renderIndex(await readFile(distIndex, 'utf8'), taskEntry ? '../' : './')
+      body = renderIndex(await readFile(distIndex, 'utf8'), taskEntry ? (requestPathname.endsWith('/') ? '../../' : '../') : './')
       headers = { 'content-type': HTML_MIME }
     } else {
       body = await readFile(target)
