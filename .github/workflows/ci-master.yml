@@ -151,6 +151,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The self-hosted runner starts jobs under umask 002 with TMPDIR inside
+      # a group-writable directory; the spill-local POSIX trust checks reject
+      # their own fixtures there (M-272). Carve a private 0700 TMPDIR under
+      # runner.temp so runner cleanup still owns it.
+      - name: Use runner-owned temporary storage
+        run: |
+          private_tmp="${{ runner.temp }}/dsh-tmp-${{ github.run_id }}-${{ github.run_attempt }}"
+          mkdir -p "$private_tmp"
+          chmod 700 "$private_tmp"
+          echo "TMPDIR=$private_tmp" >> "$GITHUB_ENV"
+
       # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
       # the root partition's /tmp before the first pnpm call in this lane.
       # see .github/workflows/ci.yml.

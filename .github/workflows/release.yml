@@ -50,7 +50,10 @@ jobs:
         run: |
           echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
           echo "npm_config_devdir=${{ runner.temp }}/node-gyp" >> "$GITHUB_ENV"
-          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
+          private_tmp="${{ runner.temp }}/dsh-tmp-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}"
+          mkdir -p "$private_tmp"
+          chmod 700 "$private_tmp"
+          echo "TMPDIR=$private_tmp" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v5.0.0
         with:
@@ -112,7 +115,10 @@ jobs:
         run: |
           echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
           echo "npm_config_devdir=${{ runner.temp }}/node-gyp" >> "$GITHUB_ENV"
-          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
+          private_tmp="${{ runner.temp }}/dsh-tmp-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}"
+          mkdir -p "$private_tmp"
+          chmod 700 "$private_tmp"
+          echo "TMPDIR=$private_tmp" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v5.0.0
         with:
