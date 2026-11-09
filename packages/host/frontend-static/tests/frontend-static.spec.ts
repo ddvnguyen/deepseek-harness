@@ -188,6 +188,15 @@ describe('real Loader composition', () => {
     expect((await request(port, '/task/abc/extra', authenticated())).status).toBe(404)
     expect((await request(port, '/task/', authenticated())).status).toBe(404)
 
+    // A dist asset cannot shadow a task entry: even if a file exists at the
+    // colliding path, the shell wins (A2).
+    await mkdir(join(root!, 'dist', 'task'), { recursive: true })
+    await writeFile(join(root!, 'dist', 'task', 'abc'), 'SHADOW')
+    const shadowed = await request(port, '/task/abc', authenticated())
+    expect(shadowed.status).toBe(200)
+    expect(shadowed.body).toContain('shell')
+    expect(shadowed.body).not.toContain('SHADOW')
+
     expect(await request(port, '/', authenticated({ method: 'HEAD' }))).toEqual({
       status: 200,
       type: 'text/html; charset=utf-8',
