@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-09-web-deep-path-task-route.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-09-web-deep-path-task-route.md
+/agent-note-a-deep-task-path-is-a-document-relative-entry:
+  en: 28d561e01c38f8cc
+  zh: 280dbcf8e025a4fb
+/agent-note-a-deep-task-path-is-a-document-relative-entry/problem:
+  en: 95774d69dea62de4
+  zh: 95774d69dea62de4
+/agent-note-a-deep-task-path-is-a-document-relative-entry/decision:
+  en: 05c6e91b4c87824a
+  zh: 05c6e91b4c87824a
+/agent-note-a-deep-task-path-is-a-document-relative-entry/alternatives-considered:
+  en: 8e10335aee755421
+  zh: 8e10335aee755421
+/agent-note-a-deep-task-path-is-a-document-relative-entry/consequences:
+  en: 536d6fc56e75fb03
+  zh: 536d6fc56e75fb03
+/agent-note-a-deep-task-path-is-a-document-relative-entry/testing:
+  en: 57376b6f829dee4d
+  zh: 57376b6f829dee4d

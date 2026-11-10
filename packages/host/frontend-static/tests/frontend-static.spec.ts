@@ -174,6 +174,36 @@ describe('real Loader composition', () => {
     // An authenticated browser renders for the owner's shared browser Peer.
     expect(renderedFor).toEqual([loaded.connection.browserPeer, loaded.connection.browserPeer, loaded.connection.browserPeer])
     offRows()
+
+    // Deep task entry: served as the shell with a per-entry base that resolves
+    // app-owned routes back to the mount (M-52 amendment A1/A2).
+    const deep = await request(port, '/task/abc', authenticated())
+    expect(deep.status).toBe(200)
+    expect(deep.type).toBe('text/html; charset=utf-8')
+    expect(deep.body).toContain('shell')
+    expect(deep.body.match(/<base\b/g)).toHaveLength(1)
+    expect(deep.body).toContain('<base href="../">')
+
+    // Out of scope paths stay 404.
+    expect((await request(port, '/task/abc/extra', authenticated())).status).toBe(404)
+    expect((await request(port, '/task/', authenticated())).status).toBe(404)
+
+    // A dist asset cannot shadow a task entry: even if a file exists at the
+    // colliding path, the shell wins (A2).
+    await mkdir(join(root!, 'dist', 'task'), { recursive: true })
+    await writeFile(join(root!, 'dist', 'task', 'abc'), 'SHADOW')
+    const shadowed = await request(port, '/task/abc', authenticated())
+    expect(shadowed.status).toBe(200)
+    expect(shadowed.body).toContain('shell')
+    expect(shadowed.body).not.toContain('SHADOW')
+
+    // Trailing-slash form: served as the shell with a deeper per-entry base
+    // (Architect REQUEST CHANGES, trailing-slash base).
+    const trailing = await request(port, '/task/abc/', authenticated())
+    expect(trailing.status).toBe(200)
+    expect(trailing.body.match(/<base\b/g)).toHaveLength(1)
+    expect(trailing.body).toContain('<base href="../../">')
+
     expect(await request(port, '/', authenticated({ method: 'HEAD' }))).toEqual({
       status: 200,
       type: 'text/html; charset=utf-8',
