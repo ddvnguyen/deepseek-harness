@@ -667,7 +667,7 @@ export class AgentLoop extends Service implements AgentFactory {
    */
   async create(id: SessionId, options: AgentOptions = {}, meta: Pick<SessionHeader, 'cwd'> = {}): Promise<Agent> {
     const merged = applyExternalOwnerMeta(meta, processExternalOwner())
-    const stamped: CreateSessionOptions = merged === undefined ? {} : { meta: merged }
+    const stamped: CreateSessionOptions = { meta: merged }
     using preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(id, stamped))
     const stored = await this.createStoredSession(preparation.session)
     return (await this.initializeAgent(this.ctx, {
@@ -864,6 +864,14 @@ function processExternalOwner(): string | undefined {
  * metadata. An explicit caller-supplied label wins; an absent one stays
  * absent, so credentials-less or same-process environments stamp nothing.
  */
+function applyExternalOwnerMeta(
+  meta: NonNullable<CreateSessionOptions['meta']>,
+  configured: string | undefined,
+): NonNullable<CreateSessionOptions['meta']>
+function applyExternalOwnerMeta(
+  meta: CreateSessionOptions['meta'] | undefined,
+  configured: string | undefined,
+): CreateSessionOptions['meta'] | undefined
 function applyExternalOwnerMeta(
   meta: CreateSessionOptions['meta'] | undefined,
   configured: string | undefined,

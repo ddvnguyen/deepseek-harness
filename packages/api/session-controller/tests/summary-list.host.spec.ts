@@ -91,6 +91,14 @@ function seedSession(ctx: Context): { id: SessionId } {
 }
 
 describe('session.list summary payload', () => {
+  it('includes an external owner in the list summary', async () => {
+    const { ctx } = await harness()
+    const session = ctx.sessions.create(undefined, { meta: { cwd: '/workspace', externalOwner: 'external-run' } })
+    const response = await (await remote(ctx)).list({})
+    if (!response.ok) throw new Error('unreachable')
+    expect(response.value.items.find(item => item.sessionId === session.id)).toMatchObject({ externalOwner: 'external-run' })
+  })
+
   it('carries every registered wire key except the summary-excluded units', async () => {
     const { ctx } = await harness()
     const { id } = seedSession(ctx)

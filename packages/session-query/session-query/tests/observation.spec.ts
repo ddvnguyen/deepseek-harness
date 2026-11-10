@@ -20,6 +20,7 @@ import type {
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
 import { SessionObservationReader } from '../src/observation.ts'
+import { readColdSessionLog } from '../src/cold-read.ts'
 
 function header(id: string): SessionHeader {
   return { version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt: 1, isSeeded: false, cwd: '/workspace' }
@@ -233,6 +234,20 @@ describe('SessionObservationReader live path', () => {
 })
 
 describe('SessionObservationReader cold path', () => {
+  it('balances a cold log on probe failure but propagates cancellation', async () => {
+    const meta = header('cold-probe-failure')
+    const store = new Map([[meta.id, { header: meta, events: interruptedLog('in-flight'), revision: 'r1' }]])
+    const counters = { stat: 0, open: 0, read: 0 }
+    const failure = new Error('probe unavailable')
+    const persistence = stubPersistence(store, counters, { leaseFailure: failure })
+    const result = await readColdSessionLog(persistence, meta.id)
+    expect(result.liveWriter).toBe(false)
+    expect(result.events.map(event => event.type)).toEqual(['turn/start', 'user/message', 'turn/end'])
+    const abort = Object.assign(new Error('cancelled'), { name: 'AbortError' })
+    vi.spyOn(persistence, 'writeLease').mockRejectedValueOnce(abort)
+    await expect(readColdSessionLog(persistence, meta.id)).rejects.toBe(abort)
+  })
+
   it('balances an interrupted stored turn in memory and exposes the durable revision', async () => {
     const ctx = await readerContext()
     const meta = header('interrupted-cold')
@@ -364,6 +379,22 @@ describe('SessionObservationReader cold path', () => {
     // One read cycle only: no reload churn behind the same revision.
     expect(counters.read).toBe(1)
     expect(probeCalls).toBe(2)
+    await ctx.fiber.dispose()
+  })
+
+  it('propagates cancellation of a cached live-writer probe', async () => {
+    const ctx = await readerContext()
+    const meta = header('cached-probe-aborted')
+    const store = new Map([[meta.id, { header: meta, events: interruptedLog('in-flight'), revision: 'r1' }]])
+    const counters = { stat: 0, open: 0, read: 0 }
+    const persistence = stubPersistence(store, counters, { liveWriter: true })
+    ctx.provide('sessionPersistence', persistence)
+    const reader = new SessionObservationReader(ctx)
+    using first = await reader.read(meta.id, { projectionMode: 'none' })
+    expect(first.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+    const aborted = Object.assign(new Error('probe cancelled'), { name: 'AbortError' })
+    vi.spyOn(persistence, 'writeLease').mockRejectedValueOnce(aborted)
+    await expect(reader.read(meta.id, { projectionMode: 'none', signal: new AbortController().signal })).rejects.toBe(aborted)
     await ctx.fiber.dispose()
   })
 

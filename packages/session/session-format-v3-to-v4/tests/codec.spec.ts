@@ -19,6 +19,14 @@ function restore(events: readonly SessionFormatEvent[], sourceHeader = header) {
 }
 
 describe('V4 framing and restoration', () => {
+  it('round trips an external owner through physical framing and the streaming decoder', () => {
+    const owned = { ...header, externalOwner: 'run-123' }
+    const physical = releasedV4SessionFormatCodec.encodeHeader(owned, 0)
+    expect(physical).toEqual({ type: 'session', ...owned })
+    expect(releasedV4SessionFormatCodec.decodeHeader(physical)).toEqual(owned)
+    expect(releasedV4SessionFormatCodec.createDecoder(physical, 'strict').header).toEqual(owned)
+  })
+
   it('reuses released V2 physical framing and round trips native V4 rows', () => {
     const physical = releasedV4SessionFormatCodec.encodeHeader(header, 0)
     expect(physical).toEqual({ type: 'session', ...header })

@@ -105,6 +105,8 @@ const dirs: string[] = []
 const contexts: Context[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   refuse.lockOpen = false
   refuse.flock = false
   refuse.flockBusy = false
@@ -155,6 +157,14 @@ const EVENTS = [
 ] as const
 
 describe('cross-process write lock', () => {
+  it('reports no lease for missing or not-yet-materialized sessions', async () => {
+    const backend = await mount(await freshRoot())
+    expect(await backend.writeLease(SessionId('missing'))).toBeUndefined()
+    const pending = await backend.create(meta('pending'))
+    expect(await backend.writeLease(SessionId('pending'))).toBeUndefined()
+    await pending.close()
+  })
+
   it('excludes a second instance while the holder is live, and admits it after close', async () => {
     const root = await freshRoot()
     const first = await mount(root)
@@ -443,6 +453,32 @@ async function readLockFile(dir: string): Promise<string | undefined> {
 }
 
 describe.skipIf(process.platform === 'win32')('lease holder record and liveness probe', () => {
+  it('treats an inaccessible process as live and malformed or oversized pids by lock age', async () => {
+    const dir = join(await freshRoot(), 'unknown-holder')
+    mkdirSync(dir, { recursive: true })
+    const lock = join(dir, LOCK)
+    await writeFile(lock, '12345\nexternal\n')
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EPERM' })
+    })
+    expect(await externalWriterLeaseProbe(dir)).toEqual({ running: true, processId: 12345, owner: 'external' })
+    kill.mockRestore()
+    for (const record of ['not-a-pid\n', '999999999999999999\n']) {
+      await writeFile(lock, record)
+      expect(await externalWriterLeaseProbe(dir)).toEqual({ running: true })
+    }
+    refuse.lockStat = true
+    expect(await externalWriterLeaseProbe(dir)).toBeUndefined()
+  })
+
+  it('omits an owner when the environment label contains only whitespace', async () => {
+    vi.stubEnv('DSH_SESSION_OWNER', ' \n\t ')
+    const dir = join(await freshRoot(), 'empty-owner')
+    const lease = await SessionWriteLease.acquire(dir, SessionId('empty-owner'))
+    expect(await readLockFile(dir)).toBe(`${process.pid}\n`)
+    await lease.release()
+  })
+
   it('an acquired lock records the holder pid, and release settles the probe', async () => {
     const dir = join(await freshRoot(), 'solo')
     const lease = await SessionWriteLease.acquire(dir, SessionId('recorded'))

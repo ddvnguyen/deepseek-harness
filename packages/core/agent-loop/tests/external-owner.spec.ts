@@ -29,6 +29,20 @@ async function makeCoreContext(): Promise<Context> {
 }
 
 describe('DSH_SESSION_OWNER stamping', () => {
+  it('stamps an owner without caller metadata and ignores an empty label', async () => {
+    const ctx = await makeCoreContext()
+    contexts.push(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    vi.stubEnv('DSH_SESSION_OWNER', '  run without metadata  ')
+    const owned = await ctx.agents.create({
+      sessionId: SessionId('owner-no-meta'), agentOptions: { provider: 'mock', model: 'mock' },
+    })
+    expect(owned.agent.session.header.externalOwner).toBe('run without metadata')
+    vi.stubEnv('DSH_SESSION_OWNER', ' \n ')
+    const bare = await ctx.agentLoop.create(SessionId('empty-owner-label'), { provider: 'mock', model: 'mock' })
+    expect(bare.session.header.externalOwner).toBeUndefined()
+  })
+
   it('stamps created sessions with the environment label', async () => {
     vi.stubEnv('DSH_SESSION_OWNER', 'Multica run M-142')
     const ctx = await makeCoreContext()

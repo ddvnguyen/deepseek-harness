@@ -54,8 +54,8 @@ interface ExternalStore {
 function provideExternalPersistence(
   ctx: Context,
   store: ExternalStore,
-  hooks: { probes?: (probes: { n: number }) => void } = {},
-): { n: number } {
+  hooks: { probes?: (probes: { n: number }) => void; ignoreAbort?: boolean } = {},
+): { probes: { n: number }; stopPersistence: () => void } {
   const probes = { n: 0 }
   const persistence = {
     open: (sessionId: SessionId, access: SessionAccess): Promise<SessionHandle> => {
@@ -79,7 +79,7 @@ function provideExternalPersistence(
       _sessionId: SessionId,
       options?: SessionPersistenceStatOptions,
     ): Promise<SessionPersistenceSnapshot | undefined> => {
-      options?.signal?.throwIfAborted()
+      if (hooks.ignoreAbort !== true) options?.signal?.throwIfAborted()
       return { header: store.header, revision: SessionPersistenceRevision(store.revision) }
     },
     writeLease: async (): Promise<SessionExternalWriterProbe | undefined> => {
@@ -90,32 +90,140 @@ function provideExternalPersistence(
         ...(store.owner === null ? {} : { owner: store.owner }) })
     },
   }
-  ctx.provide('sessionPersistence', persistence as never)
-  return probes
+  const stopPersistence = ctx.provide('sessionPersistence', persistence as never)
+  return { probes, stopPersistence }
 }
 
 async function setup(
   store: ExternalStore,
-  hooks: { probes?: (probes: { n: number }) => void } = {},
+  hooks: { probes?: (probes: { n: number }) => void; ignoreAbort?: boolean } = {},
 ): Promise<{
   ctx: Context
   transport: WebController
   statuses: Array<{ sessionId: SessionId; running: boolean; owner: string | null | undefined }>
   probes: { n: number }
+  stopPersistence: () => void
 }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   installSessionReadTestServices(ctx)
-  const probes = provideExternalPersistence(ctx, store, hooks)
+  const { probes, stopPersistence } = provideExternalPersistence(ctx, store, hooks)
   const history = new HistoryController(ctx)
   const transport = new WebController(ctx, history, (observation) => { observation[Symbol.dispose]() })
   const statuses: Array<{ sessionId: SessionId; running: boolean; owner: string | null | undefined }> = []
   ctx.on('api-session/status', (sessionId, running, owner) => {
     statuses.push({ sessionId, running, owner })
   })
-  return { ctx, transport, statuses, probes }
+  return { ctx, transport, statuses, probes, stopPersistence }
 }
 describe('external-writer follow tail', () => {
+  it('rejects a discontinuous external history instead of delivering a skipped event', async () => {
+    const store: ExternalStore = {
+      header: { version: SESSION_FORMAT_VERSION, id: sid('sparse-external-store'), createdAt: 1, cwd: '/proj', isSeeded: false },
+      events: [], revision: 'r1', liveWriter: true, owner: 'bridge-a',
+    }
+    const { ctx, transport } = await setup(store)
+    const abort = new AbortController()
+    const iterator = transport.follow({ address: { kind: 'session', sessionId: store.header.id } }, abort.signal)
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot' } })
+    store.events.length = 2
+    store.events[1] = event('user/message', SessionSeq(1), 'missing predecessor')
+    store.revision = 'r2'
+    await expect(iterator.next()).rejects.toThrow('session event stream skipped seq 0')
+    abort.abort()
+    await ctx.fiber.dispose()
+  })
+
+  it('stops cleanly if persistence is removed while a follow poll is in flight', async () => {
+    const store: ExternalStore = {
+      header: { version: SESSION_FORMAT_VERSION, id: sid('removed-external-store'), createdAt: 1, cwd: '/proj', isSeeded: false },
+      events: [], revision: 'r1', liveWriter: true, owner: 'bridge-a',
+    }
+    let stopPersistence: () => void = () => {}
+    const { ctx, transport, statuses, stopPersistence: stop } = await setup(store, {
+      probes: (count) => { if (count.n === 1) stopPersistence() },
+    })
+    stopPersistence = stop
+    const abort = new AbortController()
+    const iterator = transport.follow({ address: { kind: 'session', sessionId: store.header.id } }, abort.signal)
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot' } })
+    const pending = iterator.next()
+    await vi.waitFor(() => { expect(statuses).toContainEqual({ sessionId: store.header.id, running: true, owner: 'bridge-a' }) })
+    abort.abort()
+    await expect(pending).resolves.toMatchObject({ done: true })
+    await ctx.fiber.dispose()
+  })
+
+  it.each([new Error('timer unavailable'), 'timer unavailable'])('keeps the stream cancellable when scheduling fails with %s', async (failure) => {
+    const store: ExternalStore = {
+      header: { version: SESSION_FORMAT_VERSION, id: sid('poll-scheduler-failure'), createdAt: 1, cwd: '/proj', isSeeded: false },
+      events: [], revision: 'r1', liveWriter: true, owner: 'bridge-a',
+    }
+    const { ctx, transport } = await setup(store)
+    const abort = new AbortController()
+    const iterator = transport.follow({ address: { kind: 'session', sessionId: store.header.id } }, abort.signal)
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot' } })
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    const timer = vi.spyOn(globalThis, 'setTimeout').mockImplementationOnce(() => { throw failure })
+    const pending = iterator.next()
+    try {
+      for (let step = 0; step < 50 && warn.mock.calls.length === 0; step += 1) await Promise.resolve()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('timer unavailable'))
+    } finally {
+      timer.mockRestore()
+      abort.abort()
+      await expect(pending).resolves.toMatchObject({ done: true })
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('stops following when a non-cooperative persistence backend completes after cancellation', async () => {
+    const store: ExternalStore = {
+      header: { version: SESSION_FORMAT_VERSION, id: sid('abort-external-poll'), createdAt: 1, cwd: '/proj', isSeeded: false },
+      events: [], revision: 'r1', liveWriter: true, owner: null,
+    }
+    const abort = new AbortController()
+    const { ctx, transport } = await setup(store, {
+      ignoreAbort: true,
+      probes: (count) => { if (count.n === 1) abort.abort('cancelled') },
+    })
+    const iterator = transport.follow({ address: { kind: 'session', sessionId: store.header.id } }, abort.signal)
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot' } })
+    await expect(iterator.next()).resolves.toMatchObject({ done: true })
+    await ctx.fiber.dispose()
+  })
+
+  it.each([new Error('temporary probe refusal'), 'temporary probe refusal'])('survives a transient lease polling failure %s', async (failure) => {
+    const store: ExternalStore = {
+      header: { version: SESSION_FORMAT_VERSION, id: sid('retry-external-poll'), createdAt: 1, cwd: '/proj', isSeeded: false },
+      events: [], revision: 'r1', liveWriter: true, owner: 'bridge-a',
+    }
+    let refused = false
+    const { ctx, transport, statuses, probes } = await setup(store, {
+      probes: (count) => {
+        if (count.n === 1 && !refused) {
+          refused = true
+          throw failure
+        }
+      },
+    })
+    const abort = new AbortController()
+    const iterator = transport.follow({ address: { kind: 'session', sessionId: store.header.id } }, abort.signal)
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot' } })
+    const pending = iterator.next()
+    await vi.waitFor(() => { expect(refused).toBe(true) })
+    await vi.waitFor(() => { expect(probes.n).toBeGreaterThan(1) }, { timeout: 5000 })
+    expect(statuses).toContainEqual({ sessionId: store.header.id, running: true, owner: 'bridge-a' })
+    abort.abort()
+    await expect(pending).resolves.toMatchObject({ done: true })
+    await ctx.fiber.dispose()
+  }, 10000)
+
   it('does not poll an external lease while following a live local session', async () => {
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION,

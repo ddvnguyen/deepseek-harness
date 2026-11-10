@@ -454,6 +454,7 @@ describe('JsonlSessionPersistence: format helpers', () => {
       origin: 'subagent',
       delegationDepth: 2,
       agentPreset: 'minimal',
+      externalOwner: 'external-run',
     }
     const events = [
       ...Array.from({ length: 3 }, (_, seq) => ({
@@ -2249,6 +2250,11 @@ describe('JsonlSessionPersistence: scanLog unit', () => {
 
   it('rejects a corrupt header line', () => {
     expect(() => scanLog(Buffer.from('not json\n'))).toThrow(/header/)
+  })
+
+  it('rejects a non-string external owner in a stored header', () => {
+    const line = toHeaderLine({ version: SESSION_FORMAT_VERSION, id: SessionId('invalid-external-owner'), createdAt: 1, isSeeded: false }, SessionLogOffset(0))
+    expect(() => scanLog(Buffer.from(`${JSON.stringify({ ...line, externalOwner: 42 })}\n`))).toThrow(/header/)
   })
 
   it('rejects a non-session first line', () => {
