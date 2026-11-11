@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-11-07-session-external-owner.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-11-07-session-external-owner.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-11-07-session-external-owner:
+  en: 6a606766fd699a1a
+  zh: 62e731442c8879b1
+/2026-11-07-session-external-owner/summary:
+  en: 2cb1085a323eee31
+  zh: b5dcd67d501cdad7
+/2026-11-07-session-external-owner/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-11-07-session-external-owner/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-11-07-session-external-owner/compatibility:
+  en: 5a6c37818bf346ce
+  zh: b52d0b2025f79bd7
+/2026-11-07-session-external-owner/verification:
+  en: 3d50511f791ccd65
+  zh: d5ae3e1feeafdd0e
+/2026-11-07-session-external-owner/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

@@ -1,0 +1,18 @@
+{
+  "formatVersion": 2,
+  "roots": [
+    {"key":"SessionHeader","kind":"header","digest":"6ed57fde2cb35c28b89d4d400b6ca3a86bd94843217935decf2cb8c317c65fab"},
+    {"key":"JsonlHeaderLine","kind":"header","digest":"c17a7b53909769701c8310a88721927acc100e6ec6fac06b202c1ad6efd12b5e"}
+  ],
+  "types": [],
+  "nodes": {
+    "0657d3ca5ac4e7bf": {"kind":"primitive","type":"number"},
+    "4cd48f3e5108bd6e": {"kind":"primitive","type":"string"},
+    "6ed57fde2cb35c28": {"kind":"object","properties":[{"name":"agentPreset","type":"4cd48f3e5108bd6e","optional":true},{"name":"createdAt","type":"0657d3ca5ac4e7bf","optional":false},{"name":"cwd","type":"4cd48f3e5108bd6e","optional":true},{"name":"delegationDepth","type":"0657d3ca5ac4e7bf","optional":true},{"name":"externalOwner","type":"4cd48f3e5108bd6e","optional":true},{"name":"id","type":"4cd48f3e5108bd6e","optional":false},{"name":"isSeeded","type":"aa93010d0e521ad7","optional":false},{"name":"origin","type":"aacda84a69739238","optional":true},{"name":"parentSession","type":"4cd48f3e5108bd6e","optional":true},{"name":"version","type":"af6e173f7be819bc","optional":false}],"indices":[]},
+    "aa93010d0e521ad7": {"kind":"primitive","type":"boolean"},
+    "aacda84a69739238": {"kind":"literal","value":"subagent"},
+    "af6e173f7be819bc": {"kind":"literal","value":4},
+    "c17a7b5390976970": {"kind":"object","properties":[{"name":"agentPreset","type":"4cd48f3e5108bd6e","optional":true},{"name":"createdAt","type":"0657d3ca5ac4e7bf","optional":false},{"name":"cwd","type":"4cd48f3e5108bd6e","optional":true},{"name":"delegationDepth","type":"0657d3ca5ac4e7bf","optional":false},{"name":"externalOwner","type":"4cd48f3e5108bd6e","optional":true},{"name":"id","type":"4cd48f3e5108bd6e","optional":false},{"name":"isSeeded","type":"aa93010d0e521ad7","optional":false},{"name":"origin","type":"aacda84a69739238","optional":true},{"name":"parentSession","type":"4cd48f3e5108bd6e","optional":true},{"name":"type","type":"e41bdebe246abe17","optional":false},{"name":"version","type":"0657d3ca5ac4e7bf","optional":false}],"indices":[]},
+    "e41bdebe246abe17": {"kind":"literal","value":"session"}
+  }
+}

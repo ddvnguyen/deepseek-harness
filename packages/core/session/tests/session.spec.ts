@@ -23,6 +23,18 @@ declare module '@deepseek-ai/dsh-llm' {
 }
 
 describe('Session', () => {
+  it('validates the external owner when restoring a session header', () => {
+    const id = SessionId('external-owner-header')
+    const header = { version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: false }
+    const restore = (externalOwner: unknown) => Session.fromRestore(
+      id, [], { ...header, externalOwner } as SessionHeader, SessionLogOffset(0), 'detached',
+    )
+    expect(restore('run-123').header.externalOwner).toBe('run-123')
+    expect(() => restore(123)).toThrow('externalOwner must be a string')
+    expect(() => restore('run\nother')).toThrow('externalOwner must be a single line')
+    expect(() => restore('run\rother')).toThrow('externalOwner must be a single line')
+  })
+
   it('exposes one stable readonly surface view', () => {
     const session = Session.create(SessionId('surface-view'))
     const surface = session.surface

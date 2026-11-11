@@ -47,6 +47,7 @@ describe('Session Controller Client apply', () => {
   it('routes Remote events from the $events stream into the object layer and runs handleConnected once per generation', async ({ mock, start }) => {
     const connected = vi.spyOn(ClientSessions.prototype, 'handleConnected')
     const error = vi.spyOn(ClientSessions.prototype, 'handleSessionError')
+    const external = vi.spyOn(ClientSessions.prototype, 'handleExternalWriterStatus')
     const { client, sessions } = await bench(start)
     // The first generation's `connection/reset` already ran it; apply itself saw no Host yet.
     await vi.waitFor(() => { expect(connected).toHaveBeenCalledOnce() })
@@ -57,6 +58,8 @@ describe('Session Controller Client apply', () => {
     })
 
     await emit(mock, 'api-session/status', sid('session-1'), true)
+    await emit(mock, 'api-session/status', sid('session-1'), true, 'external-run')
+    expect(external).toHaveBeenCalledWith(sid('session-1'), true)
     await emit(mock, 'api-session/activity', sid('session-1'), 9)
     await emit(mock, 'api-session/error', sid('session-1'), 'agent failed')
     await vi.waitFor(() => {

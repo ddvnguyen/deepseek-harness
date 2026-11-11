@@ -17,6 +17,7 @@ import type {
 } from '@deepseek-ai/dsh-session'
 import type { SessionTitleSnapshot } from '@deepseek-ai/dsh-session-title'
 import type { SessionSearchCursor } from './cursor.ts'
+import type { SessionExternalWriterProbe } from '@deepseek-ai/dsh-session-persistence'
 
 export type { SessionSearchCursor } from './cursor.ts'
 
@@ -33,6 +34,12 @@ export interface SessionRecord {
   persisted: boolean
   /** Current for live Sessions; otherwise the persistence format status when reported. */
   formatStatus?: 'current' | 'migration-required'
+  /**
+   * The write-lease probe the persisted backend reported alongside the
+   * listing snapshot, when it reported one: truthful external liveness for
+   * listing consumers without a per-row id-resolution probe.
+   */
+  lease?: SessionExternalWriterProbe
 }
 
 /** One atomic live-preferred observation of a session's current model surface. */

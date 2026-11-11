@@ -133,6 +133,14 @@ export interface SessionHeader {
    * would replay history the model can no longer act on.
    */
   readonly agentPreset?: string
+  /**
+   * Opaque label of the external producer that owns this session's write
+   * side (for example an external run bridge: "Multica run M-142"), stamped
+   * at create from the process environment. Presentation metadata only: the
+   * write lease — not this label — decides who may write, and a resumed
+   * session keeps its original header unchanged.
+   */
+  readonly externalOwner?: string
 }
 
 /**
@@ -161,6 +169,7 @@ export interface CreateSessionOptions {
     readonly origin?: 'subagent'
     readonly delegationDepth?: number
     readonly agentPreset?: string
+    readonly externalOwner?: string
   }
 }
 

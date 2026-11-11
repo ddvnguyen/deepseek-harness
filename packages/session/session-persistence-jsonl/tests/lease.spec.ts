@@ -11,8 +11,8 @@
  * pinned by lease.two-process.e2e.ts.
  */
 
-import { existsSync } from 'node:fs'
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { existsSync, mkdirSync } from 'node:fs'
+import { mkdtemp, open, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -26,7 +26,7 @@ import {
 } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlSessionPersistence from '../src/index.ts'
-import { LEASE_FILENAME, SessionWriteLease } from '../src/lease.ts'
+import { externalWriterLeaseProbe, LEASE_FILENAME, SessionWriteLease } from '../src/lease.ts'
 import type { JsonlSessionHandle } from '../src/storage.ts'
 import { sessionDir } from '../src/format.ts'
 
@@ -105,6 +105,8 @@ const dirs: string[] = []
 const contexts: Context[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   refuse.lockOpen = false
   refuse.flock = false
   refuse.flockBusy = false
@@ -155,6 +157,14 @@ const EVENTS = [
 ] as const
 
 describe('cross-process write lock', () => {
+  it('reports no lease for missing or not-yet-materialized sessions', async () => {
+    const backend = await mount(await freshRoot())
+    expect(await backend.writeLease(SessionId('missing'))).toBeUndefined()
+    const pending = await backend.create(meta('pending'))
+    expect(await backend.writeLease(SessionId('pending'))).toBeUndefined()
+    await pending.close()
+  })
+
   it('excludes a second instance while the holder is live, and admits it after close', async () => {
     const root = await freshRoot()
     const first = await mount(root)
@@ -430,5 +440,108 @@ describe('cross-process write lock', () => {
     }
     await a.close()
     await b.close()
+  })
+})
+
+/** Raw ppid record parser matching the acquire contract: first line pid. */
+async function readLockFile(dir: string): Promise<string | undefined> {
+  try {
+    return await readFile(join(dir, LOCK), 'utf8')
+  } catch {
+    return undefined
+  }
+}
+
+describe.skipIf(process.platform === 'win32')('lease holder record and liveness probe', () => {
+  it('treats an inaccessible process as live and malformed or oversized pids by lock age', async () => {
+    const dir = join(await freshRoot(), 'unknown-holder')
+    mkdirSync(dir, { recursive: true })
+    const lock = join(dir, LOCK)
+    await writeFile(lock, '12345\nexternal\n')
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EPERM' })
+    })
+    expect(await externalWriterLeaseProbe(dir)).toEqual({ running: true, processId: 12345, owner: 'external' })
+    kill.mockRestore()
+    for (const record of ['not-a-pid\n', '999999999999999999\n']) {
+      await writeFile(lock, record)
+      expect(await externalWriterLeaseProbe(dir)).toEqual({ running: true })
+    }
+    refuse.lockStat = true
+    expect(await externalWriterLeaseProbe(dir)).toBeUndefined()
+  })
+
+  it('omits an owner when the environment label contains only whitespace', async () => {
+    vi.stubEnv('DSH_SESSION_OWNER', ' \n\t ')
+    const dir = join(await freshRoot(), 'empty-owner')
+    const lease = await SessionWriteLease.acquire(dir, SessionId('empty-owner'))
+    expect(await readLockFile(dir)).toBe(`${process.pid}\n`)
+    await lease.release()
+  })
+
+  it('an acquired lock records the holder pid, and release settles the probe', async () => {
+    const dir = join(await freshRoot(), 'solo')
+    const lease = await SessionWriteLease.acquire(dir, SessionId('recorded'))
+    expect(await readLockFile(dir)).toBe(`${process.pid}\n`)
+    expect(await externalWriterLeaseProbe(dir)).toMatchObject({ running: true })
+    await lease.release()
+    expect(await readLockFile(dir)).toBe('0\n')
+    expect(await externalWriterLeaseProbe(dir)).toBeUndefined()
+  })
+
+  it('a contended second opener leaves the live holder\'s record intact', async () => {
+    const dir = join(await freshRoot(), 'solo')
+    const holder = await SessionWriteLease.acquire(dir, SessionId('contended-record'))
+    // The failed acquisition must not have erased the holder's record.
+    expect(await readLockFile(dir)).toBe(`${process.pid}\n`)
+    await expect(SessionWriteLease.acquire(dir, SessionId('contended-record'))).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
+    expect(await readLockFile(dir)).toBe(`${process.pid}\n`)
+    expect(await externalWriterLeaseProbe(dir)).toMatchObject({ running: true })
+    await holder.release()
+  })
+
+  it('records the single-line owner label from the environment', async () => {
+    vi.stubEnv('DSH_SESSION_OWNER', ' label to keep\nsecond line dropped ')
+    const dir = join(await freshRoot(), 'solo')
+    expect(process.env.DSH_SESSION_OWNER).toContain('\n')
+    const lease = await SessionWriteLease.acquire(dir, SessionId('labeled'))
+    expect(await readLockFile(dir)).toBe(`${process.pid}\nlabel to keep second line dropped\n`)
+    vi.unstubAllEnvs()
+    expect(await externalWriterLeaseProbe(dir)).toMatchObject({ running: true, owner: 'label to keep second line dropped' })
+    await lease.release()
+  })
+
+  it('probes an unrunnable pid record as settled, and a record-less lock rides the mtime grace', async () => {
+    const stale = join(await freshRoot(), 'stale')
+    mkdirSync(stale, { recursive: true })
+    const staleHandle = await open(join(stale, LOCK), 'a')
+    await staleHandle.write(String(0x7ffffffe) + '\n') // beyond init's pid space: ESRCH for certain
+    await staleHandle.close()
+    expect(await externalWriterLeaseProbe(stale)).toBeUndefined()
+
+    const fresh = join(await freshRoot(), 'fresh')
+    mkdirSync(fresh, { recursive: true })
+    const marker = await open(join(fresh, LOCK), 'a')
+    await marker.close()
+    expect(await externalWriterLeaseProbe(fresh)).toMatchObject({ running: true })
+
+    const expired = join(await freshRoot(), 'expired')
+    mkdirSync(expired, { recursive: true })
+    const expiredMarker = await open(join(expired, LOCK), 'a')
+    await expiredMarker.close()
+    const past = new Date(1)
+    await utimes(join(expired, LOCK), past, past)
+    expect(await externalWriterLeaseProbe(expired)).toBeUndefined()
+  })
+
+  it('a torn record rides the mtime grace rather than claiming a live holder', async () => {
+    const dir = join(await freshRoot(), 'torn')
+    mkdirSync(dir, { recursive: true })
+    const handle = await open(join(dir, LOCK), 'a')
+    await handle.write(`${process.pid}\npartial label`)
+    await handle.close()
+    // No second newline: the record is unfinished but fresh; the mtime grace
+    // still claims a holder.
+    expect(await externalWriterLeaseProbe(dir)).toMatchObject({ running: true })
   })
 })

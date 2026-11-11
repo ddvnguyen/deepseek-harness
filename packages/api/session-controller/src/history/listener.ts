@@ -11,12 +11,19 @@ import type { SessionProjectionChange, SessionEventEntry } from '../types.ts'
 /** Raw history notifications buffered before an opening cut is known. */
 export type EventItem =
   | { readonly type: 'event'; readonly session: Session; readonly event: SessionEvent }
+  | { readonly type: 'external'; readonly event: SessionEvent }
   | { readonly type: 'created'; readonly session: Session; readonly end: number }
+
+interface EventInput {
+  append(item: EventItem): void
+  prepend(item: EventItem): void
+}
 
 /** A single subscription buffers before either consumption mode starts. */
 export class EventListener implements Disposable {
   private readonly buffer: ListenerBuffer<SessionEventEntry> | undefined
   private readonly disposes: (() => void)[] = []
+  private readonly input: EventInput
   private firstReceivedSeq: number | undefined
   private nextExpectedSeq: number | undefined
 
@@ -31,21 +38,21 @@ export class EventListener implements Disposable {
     signal.throwIfAborted()
     const buffer = queue ?? new ListenerBuffer(ctx, signal)
     this.buffer = queue === undefined ? buffer as ListenerBuffer<SessionEventEntry> : undefined
-    const input = buffer.createInput<EventItem>(item => this.transform(item))
+    this.input = buffer.createInput<EventItem>(item => this.transform(item))
     const target = sessionId
     try {
       this.disposes.push(ctx.on('session/event', (session, event) => {
         if (session.id !== target) return
         buffer.capture(() => {
           this.recordFirst(event.seq)
-          input.append({ type: 'event', session, event })
+          this.input.append({ type: 'event', session, event })
         })
       }, { global: true }))
       this.disposes.push(ctx.on('session/created', (session) => {
         if (session.id !== target) return
         buffer.capture(() => {
           if (session.firstLiveSeq < session.seq) this.recordFirst(session.firstLiveSeq)
-          input.prepend({ type: 'created', session, end: session.seq })
+          this.input.prepend({ type: 'created', session, end: session.seq })
         })
       }, { global: true }))
       this.buffer?.own(() => { this[Symbol.dispose]() })
@@ -65,6 +72,13 @@ export class EventListener implements Disposable {
    * @param cursor - snapshot cut set before consuming the queue. */
   setCursor(cursor: number): void {
     this.nextExpectedSeq = cursor + 1
+  }
+
+  /** Append externally persisted events through the same sequence check as local notifications.
+   * @param events - Persisted events to append to the notification buffer.
+   */
+  appendExternal(events: readonly SessionEvent[]): void {
+    for (const event of events) this.input.append({ type: 'external', event })
   }
 
   private *transform(item: EventItem): Iterable<SessionEventEntry> {
@@ -107,7 +121,7 @@ export function eventItem(item: EventItem, next?: number): {
   events: readonly SessionEvent[]
   next: number | undefined
 } {
-  if (item.type === 'event') {
+  if (item.type === 'event' || item.type === 'external') {
     if (next !== undefined && item.event.seq < next) return { events: [], next }
     if (next !== undefined && item.event.seq !== next) {
       throw new RemoteError('gateway/internal', `session event stream skipped seq ${String(next)}`, {})

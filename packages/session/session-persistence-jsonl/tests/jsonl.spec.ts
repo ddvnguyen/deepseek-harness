@@ -34,6 +34,9 @@ const statFailure = vi.hoisted(() => ({
   error: undefined as Error | undefined,
 }))
 
+/** A session's durable holder record (`session.lock`): not a log body. */
+const LEASE_FILE = vi.hoisted(() => /session\.lock$/u)
+
 const readdirFailure = vi.hoisted(() => ({
   path: undefined as string | undefined,
   error: undefined as Error | undefined,
@@ -101,8 +104,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     readFile: (async (...args: Parameters<typeof actual.readFile>) => {
       const path = typeof args[0] === 'string' ? args[0] : undefined
       if (path === readFailure.path && readFailure.error !== undefined) throw readFailure.error
-      if (readTally.enabled && path !== undefined) {
-        readTally.bySuffix.set(path, (readTally.bySuffix.get(path) ?? 0) + 1)
+      // The lease record beside the log is not a log body: the listing and
+      // stat surfaces probe it by design (see the snapshot's `lease` field).
+      if (path === undefined || !LEASE_FILE.test(path)) {
+        if (readTally.enabled && path !== undefined) {
+          readTally.bySuffix.set(path, (readTally.bySuffix.get(path) ?? 0) + 1)
+        }
       }
       if (path !== pausedRead.path || pausedRead.resume === undefined) {
         return actual.readFile(...args)
@@ -447,6 +454,7 @@ describe('JsonlSessionPersistence: format helpers', () => {
       origin: 'subagent',
       delegationDepth: 2,
       agentPreset: 'minimal',
+      externalOwner: 'external-run',
     }
     const events = [
       ...Array.from({ length: 3 }, (_, seq) => ({
@@ -2242,6 +2250,11 @@ describe('JsonlSessionPersistence: scanLog unit', () => {
 
   it('rejects a corrupt header line', () => {
     expect(() => scanLog(Buffer.from('not json\n'))).toThrow(/header/)
+  })
+
+  it('rejects a non-string external owner in a stored header', () => {
+    const line = toHeaderLine({ version: SESSION_FORMAT_VERSION, id: SessionId('invalid-external-owner'), createdAt: 1, isSeeded: false }, SessionLogOffset(0))
+    expect(() => scanLog(Buffer.from(`${JSON.stringify({ ...line, externalOwner: 42 })}\n`))).toThrow(/header/)
   })
 
   it('rejects a non-session first line', () => {

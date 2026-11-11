@@ -547,12 +547,27 @@ export class Session implements SessionFace {
    * @param running - the new running state.
    */
   handleRunning(running: boolean): void {
-    // Running converts display state without establishing durable turn history.
-    if (running && this.blankBit) {
+    this.updateRunning(running, true)
+  }
+
+  /**
+   * Relay external-writer liveness without treating it as a local turn
+   * acceptance. An external process may hold a blank Session before it appends
+   * the first durable event.
+   * @param running - whether the external writer is live.
+   */
+  handleExternalWriterStatus(running: boolean): void {
+    this.updateRunning(running, false)
+  }
+
+  private updateRunning(running: boolean, convertsBlank: boolean): void {
+    // A local Agent's running frame implies an accepted turn; an external
+    // lease only proves ownership and can precede the first durable event.
+    if (running && convertsBlank && this.blankBit) {
       this.blankBit = false
       this.notifier.markDirty()
     }
-    if (running) this.firstPromptPendingTurn = false
+    if (running && convertsBlank) this.firstPromptPendingTurn = false
     if (this.running === running) return
     this.running = running
     this.notifier.markDirty()

@@ -10,6 +10,7 @@ import SessionPersistence, {
 } from '@deepseek-ai/dsh-session-persistence'
 import type {
   SessionAccess,
+  SessionExternalWriterProbe,
   SessionHandle,
   SessionHandleReadOptions,
   SessionHandleReadResult,
@@ -19,6 +20,7 @@ import type {
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
 import { SessionObservationReader } from '../src/observation.ts'
+import { readColdSessionLog } from '../src/cold-read.ts'
 
 function header(id: string): SessionHeader {
   return { version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt: 1, isSeeded: false, cwd: '/workspace' }
@@ -67,6 +69,10 @@ interface StubHooks {
   readFailure?: unknown
   /** Replaces the stat result. */
   statFailure?: unknown
+  /** The live-writer result of every `writeLease` probe (uncounted). */
+  liveWriter?: boolean
+  /** Replaces the writeLease result (tests the probe's failure containment). */
+  leaseFailure?: unknown
 }
 
 /** Object-stub persistence: only the members the observation reader touches. */
@@ -126,7 +132,21 @@ function stubPersistence(
     }
     return Promise.resolve(handle)
   }
-  return { stat, open } as never
+  const writeLease = (
+    id: SessionIdType,
+    options?: SessionPersistenceStatOptions,
+  ): Promise<SessionExternalWriterProbe | undefined> => {
+    void id
+    void options
+    if (hooks.leaseFailure !== undefined) {
+      // oxlint-disable-next-line typescript/prefer-promise-reject-errors
+      return Promise.reject(hooks.leaseFailure)
+    }
+    return hooks.liveWriter === true
+      ? Promise.resolve({ running: true })
+      : Promise.resolve(undefined)
+  }
+  return { stat, open, writeLease } as never
 }
 
 async function readerContext(): Promise<Context> {
@@ -214,6 +234,20 @@ describe('SessionObservationReader live path', () => {
 })
 
 describe('SessionObservationReader cold path', () => {
+  it('balances a cold log on probe failure but propagates cancellation', async () => {
+    const meta = header('cold-probe-failure')
+    const store = new Map([[meta.id, { header: meta, events: interruptedLog('in-flight'), revision: 'r1' }]])
+    const counters = { stat: 0, open: 0, read: 0 }
+    const failure = new Error('probe unavailable')
+    const persistence = stubPersistence(store, counters, { leaseFailure: failure })
+    const result = await readColdSessionLog(persistence, meta.id)
+    expect(result.liveWriter).toBe(false)
+    expect(result.events.map(event => event.type)).toEqual(['turn/start', 'user/message', 'turn/end'])
+    const abort = Object.assign(new Error('cancelled'), { name: 'AbortError' })
+    vi.spyOn(persistence, 'writeLease').mockRejectedValueOnce(abort)
+    await expect(readColdSessionLog(persistence, meta.id)).rejects.toBe(abort)
+  })
+
   it('balances an interrupted stored turn in memory and exposes the durable revision', async () => {
     const ctx = await readerContext()
     const meta = header('interrupted-cold')
@@ -268,6 +302,99 @@ describe('SessionObservationReader cold path', () => {
     observed[Symbol.dispose]()
     expect(() => observed.retain()).toThrow('is disposed')
     retained[Symbol.dispose]()
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps an open final turn unbalanced while a live external writer holds the lease', async () => {
+    const ctx = await readerContext()
+    const meta = header('interrupted-live')
+    const store = new Map([[meta.id, { header: meta, events: interruptedLog('in-flight'), revision: 'r1' }]])
+    const counters = { stat: 0, open: 0, read: 0 }
+    ctx.provide('sessionPersistence', stubPersistence(store, counters, { liveWriter: true }))
+    const reader = new SessionObservationReader(ctx)
+
+    using observed = await reader.read(meta.id)
+
+    // The open turn belongs to the live writer: no synthetic closers, and
+    // the revision still keys a legitimate reuse.
+    expect(observed.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+    expect(observed.cursor).toBe(1)
+    // The live read's reuse is gated on the probe, not on a pure cache hit.
+    const cached = await reader.read(meta.id, { projectionMode: 'none' })
+    expect(cached.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+    await ctx.fiber.dispose()
+  })
+
+  it('balances again once a live writer lease settles a death at an unchanged revision', async () => {
+    const ctx = await readerContext()
+    const meta = header('interrupted-settle')
+    const store = new Map([[meta.id, { header: meta, events: interruptedLog('crashed'), revision: 'r1' }]])
+    const counters = { stat: 0, open: 0, read: 0 }
+    let live = true
+    const persistence = stubPersistence(store, counters, { liveWriter: true })
+    ctx.provide('sessionPersistence', persistence)
+    // The probe flips after the live read survived into the cache with the
+    // same revision: the reader must not replay an unbalanced seed for a
+    // settled writer, so revalidation reloads through the fresh read.
+    vi.spyOn(persistence, 'writeLease').mockImplementation(
+      () => Promise.resolve(live ? { running: true } : undefined),
+    )
+    const reader = new SessionObservationReader(ctx, 1)
+
+    using liveObservation = await reader.read(meta.id)
+    expect(liveObservation.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+    live = false
+
+    using settled = await reader.read(meta.id, { projectionMode: 'none' })
+
+    expect(settled.events.map(event => event.type)).toEqual(['turn/start', 'user/message', 'turn/end'])
+    expect((settled.events[2] as { data: unknown }).data).toMatchObject({ turn: 1, reason: { kind: 'interrupted' } })
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps the live-read assumption when the reuse probe fails, and reloads only on a proven settle', async () => {
+    const ctx = await readerContext()
+    const meta = header('interrupted-probe-unknown')
+    const store = new Map([[meta.id, { header: meta, events: interruptedLog('in-flight'), revision: 'r1' }]])
+    const counters = { stat: 0, open: 0, read: 0 }
+    const persistence = stubPersistence(store, counters, { liveWriter: true })
+    ctx.provide('sessionPersistence', persistence)
+    // First probe: live (the seed is read unbalanced). Every later probe:
+    // refused — unknown, not settled.
+    let probeCalls = 0
+    vi.spyOn(persistence, 'writeLease').mockImplementation(() => {
+      probeCalls += 1
+      if (probeCalls === 1) return Promise.resolve({ running: true })
+      return Promise.reject(new Error('probe refused'))
+    })
+    const reader = new SessionObservationReader(ctx)
+
+    using liveObservation = await reader.read(meta.id)
+    expect(liveObservation.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+
+    // The reuse probe refuses: unknown, not settled. The prior (live-read)
+    // assumption stands and the unbalanced seed stays cached.
+    const unknown = await reader.read(meta.id, { projectionMode: 'none' })
+    expect(unknown.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+    // One read cycle only: no reload churn behind the same revision.
+    expect(counters.read).toBe(1)
+    expect(probeCalls).toBe(2)
+    await ctx.fiber.dispose()
+  })
+
+  it('propagates cancellation of a cached live-writer probe', async () => {
+    const ctx = await readerContext()
+    const meta = header('cached-probe-aborted')
+    const store = new Map([[meta.id, { header: meta, events: interruptedLog('in-flight'), revision: 'r1' }]])
+    const counters = { stat: 0, open: 0, read: 0 }
+    const persistence = stubPersistence(store, counters, { liveWriter: true })
+    ctx.provide('sessionPersistence', persistence)
+    const reader = new SessionObservationReader(ctx)
+    using first = await reader.read(meta.id, { projectionMode: 'none' })
+    expect(first.events.map(event => event.type)).toEqual(['turn/start', 'user/message'])
+    const aborted = Object.assign(new Error('probe cancelled'), { name: 'AbortError' })
+    vi.spyOn(persistence, 'writeLease').mockRejectedValueOnce(aborted)
+    await expect(reader.read(meta.id, { projectionMode: 'none', signal: new AbortController().signal })).rejects.toBe(aborted)
     await ctx.fiber.dispose()
   })
 
