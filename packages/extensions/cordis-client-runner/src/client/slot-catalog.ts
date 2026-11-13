@@ -5146,7 +5146,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     occupants: [],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.sections\', () => ctx.slots.register(\n      { name: \'sidebar.sections\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:66',
+    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:85',
   },
   {
     key: 'sidebar.session.row.hover',
