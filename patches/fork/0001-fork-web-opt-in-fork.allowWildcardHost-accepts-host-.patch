@@ -12,99 +12,8 @@ passes it on to the `webserver` row, and the Host fence is untouched.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- docs/config-catalog.md                        | 20 ++++++++++
- docs/config-catalog.zh.md                     | 20 ++++++++++
- packages/bundle/web-app/README.i18n.yaml      | 11 +++--
- packages/bundle/web-app/README.md             | 13 ++++++
- packages/bundle/web-app/README.zh.md          | 13 ++++++
- packages/bundle/web-app/cordis.patch.yml      |  7 +++-
- packages/bundle/web-app/src/startup.ts        | 33 ++++++++++++++-
- packages/bundle/web-app/tests/startup.spec.ts | 29 +++++++++++++-
- packages/host/webserver/README.i18n.yaml      | 11 +++--
- packages/host/webserver/README.md             | 15 +++++++
- packages/host/webserver/README.zh.md          | 15 +++++++
- packages/host/webserver/src/index.ts          | 40 +++++++++++++++++--
- .../host/webserver/tests/webserver.spec.ts    | 20 +++++++++-
- 13 files changed, 229 insertions(+), 18 deletions(-)
-
-diff --git a/docs/config-catalog.md b/docs/config-catalog.md
-index a1423c4bfd..4dd81b281e 100644
---- a/docs/config-catalog.md
-+++ b/docs/config-catalog.md
-@@ -1875,6 +1875,11 @@ export interface Config {
-   compressionLevel?: number
-   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
-   compressionThresholdBytes?: number
-+  /**
-+   * dsh#02 fork opt-ins; absent or false is stock behavior.
-+   * @see ForkConfig
-+   */
-+  fork?: ForkConfig
- }
- 
- /**
-@@ -1888,6 +1893,21 @@ export interface TlsConfig {
-   /** Private key file for the chain's leaf certificate; unencrypted PEM. */
-   keyFile: string
- }
-+
-+/**
-+ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
-+ * the stock upstream behavior, so a deployment must name it in its own config
-+ * for the fork to differ from upstream.
-+ */
-+export interface ForkConfig {
-+  /**
-+   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
-+   * it at load. Binding every interface is safe only behind an external
-+   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
-+   * sets it. @default false
-+   */
-+  allowWildcardHost?: boolean
-+}
- ```
- <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
- 
-diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
-index adf1f1ef02..3fc583b03a 100644
---- a/docs/config-catalog.zh.md
-+++ b/docs/config-catalog.zh.md
-@@ -1877,6 +1877,11 @@ export interface Config {
-   compressionLevel?: number
-   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
-   compressionThresholdBytes?: number
-+  /**
-+   * dsh#02 fork opt-ins; absent or false is stock behavior.
-+   * @see ForkConfig
-+   */
-+  fork?: ForkConfig
- }
- 
- /**
-@@ -1890,6 +1895,21 @@ export interface TlsConfig {
-   /** Private key file for the chain's leaf certificate; unencrypted PEM. */
-   keyFile: string
- }
-+
-+/**
-+ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
-+ * the stock upstream behavior, so a deployment must name it in its own config
-+ * for the fork to differ from upstream.
-+ */
-+export interface ForkConfig {
-+  /**
-+   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
-+   * it at load. Binding every interface is safe only behind an external
-+   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
-+   * sets it. @default false
-+   */
-+  allowWildcardHost?: boolean
-+}
- ```
- <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
- 
 diff --git a/packages/bundle/web-app/README.i18n.yaml b/packages/bundle/web-app/README.i18n.yaml
-index ac78994ab7..c6820348ae 100644
+index de0886efaa..5334a64ff0 100644
 --- a/packages/bundle/web-app/README.i18n.yaml
 +++ b/packages/bundle/web-app/README.i18n.yaml
 @@ -12,8 +12,8 @@
@@ -113,40 +22,40 @@ index ac78994ab7..c6820348ae 100644
  /deepseek-ai-dsh-web-app/table-of-contents:
 -  en: d152484eb41ac6b4
 -  zh: 09388d293f9be9cb
-+  en: c584ce2b287425f5
-+  zh: 608b79cbd23bd8d1
++  en: 485297e00c7223ee
++  zh: 5ea6318f5ebe5fdd
  /deepseek-ai-dsh-web-app/use-this-package:
-   en: 3bd37b85139d2fa7
-   zh: ba86c807eb83866e
-@@ -63,8 +63,11 @@
-   en: 449fbfa3986f98f0
-   zh: a7d66333594ab2dd
- /deepseek-ai-dsh-web-app/model-experience/web-runtime-variable/kv-cache-effect:
--  en: 37542a8b81a744f5
--  zh: c0048aaadecae296
-+  en: 87df66f690644b64
-+  zh: 1fdf5475454f736a
+   en: 1f69a4c52a27e7e5
+   zh: e4431a252fb86f7c
+@@ -48,8 +48,11 @@
+   en: 6d8d71d9a7168bdd
+   zh: c9b3f4dadc3d8367
+ /deepseek-ai-dsh-web-app/further-exploration:
+-  en: f81694f7424e2988
+-  zh: 6643f9227039e228
++  en: f8ad7c56a2a2c1cb
++  zh: 7637f5c5e1067a5a
 +/deepseek-ai-dsh-web-app/fork-opt-in-wildcard-bind-dsh-02:
-+  en: ae7dbf7a2782f4f6
-+  zh: c9410f94e271e455
- /deepseek-ai-dsh-web-app/known-limitations-and-deferred-work:
-   en: 635c1336e2f4e821
-   zh: caabdecb02e2df14
++  en: 5ad8782ac7129cf3
++  zh: 44599f6a3fab27c6
+ /deepseek-ai-dsh-web-app/model-experience:
+   en: 215e7ba838619b7b
+   zh: a311da3843709f90
 diff --git a/packages/bundle/web-app/README.md b/packages/bundle/web-app/README.md
-index cb974443e5..eedd1e7e1f 100644
+index 9fdb2d8b51..4c71c97770 100644
 --- a/packages/bundle/web-app/README.md
 +++ b/packages/bundle/web-app/README.md
-@@ -21,6 +21,7 @@ Run `dsh --profile web` for browser chat, model and settings management, and ses
+@@ -20,6 +20,7 @@ Run `dsh --profile web` for browser chat, model and settings management, and ses
+ - [Use this package](#use-this-package)
  - [Understand the implementation](#understand-the-implementation)
  - [Further Exploration](#further-exploration)
- - [Model Experience](#model-experience)
 +- [Fork opt-in: wildcard bind (dsh#02)](#fork-wildcard-host)
+ - [Model Experience](#model-experience)
  - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
  - [Dev Note](#dev-note)
+@@ -154,6 +155,18 @@ Read these pages when you want to go deeper into the shared core, the browser re
  
-@@ -160,6 +161,18 @@ Two managed-environment variable lines; constant per process.
- 
- None; the plugin contributes no system-prompt text.
+ -----
  
 +<a id="fork-wildcard-host"></a>
 +## Fork opt-in: wildcard bind (dsh#02)
@@ -160,24 +69,24 @@ index cb974443e5..eedd1e7e1f 100644
 +      allowWildcardHost: true
 +```
 +
- ## Known Limitations and Deferred Work
+ <a id="model-experience"></a>
+ ## Model Experience
  
- <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/bundle/web-app/README.zh.md b/packages/bundle/web-app/README.zh.md
-index 88bbae54a5..b9b44cce2c 100644
+index 2a617e9f52..c77368006e 100644
 --- a/packages/bundle/web-app/README.zh.md
 +++ b/packages/bundle/web-app/README.zh.md
-@@ -21,6 +21,7 @@ kind: "package-bundle"
+@@ -20,6 +20,7 @@ kind: "package-bundle"
+ - [使用本包](#use-this-package)
  - [理解实现](#understand-the-implementation)
  - [进一步探索](#further-exploration)
- - [模型体验](#model-experience)
 +- [Fork 可选项：通配地址绑定（dsh#02）](#fork-wildcard-host)
+ - [模型体验](#model-experience)
  - [已知限制与延期工作](#known-limitations-and-deferred-work)
  - [开发备注](#dev-note)
+@@ -154,6 +155,18 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发
  
-@@ -160,6 +161,18 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发
- 
- 无；该插件不贡献系统提示词文本。
+ -----
  
 +<a id="fork-wildcard-host"></a>
 +## Fork 可选项：通配地址绑定（dsh#02）
@@ -191,14 +100,14 @@ index 88bbae54a5..b9b44cce2c 100644
 +      allowWildcardHost: true
 +```
 +
- ## 已知限制与延期工作
+ <a id="model-experience"></a>
+ ## 模型体验
  
- <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/bundle/web-app/cordis.patch.yml b/packages/bundle/web-app/cordis.patch.yml
-index d751fcc462..fad038a891 100644
+index 7e6b973a9e..5fd566140e 100644
 --- a/packages/bundle/web-app/cordis.patch.yml
 +++ b/packages/bundle/web-app/cordis.patch.yml
-@@ -171,7 +171,8 @@
+@@ -179,7 +179,8 @@
      # by the web-runtime row below through the fallback seat. Routing and
      # browser-facing asset paths do not depend on the advertised URL, which the
      # web-runtime row owns; Connection reads trust authorities from webStartup.
@@ -208,7 +117,7 @@ index d751fcc462..fad038a891 100644
      - id: webserver
        name: '@deepseek-ai/dsh-host-webserver'
        inject: [webStartup]
-@@ -179,6 +180,10 @@
+@@ -187,6 +188,10 @@
          host: !!js ctx.webStartup.host ?? '127.0.0.1'
          port: !!js ctx.webStartup.port ?? 3080
          tls: !!js ctx.webStartup.tls
@@ -356,7 +265,7 @@ index 9a7a01a5cb..339d768092 100644
      const { values, observed } = await bootProvider([])
      expect(values).toEqual({ openBrowser: true, trustedHosts: [] })
 diff --git a/packages/host/webserver/README.i18n.yaml b/packages/host/webserver/README.i18n.yaml
-index 7a81b0a0db..f594557d1e 100644
+index ac210137e2..87f00e848b 100644
 --- a/packages/host/webserver/README.i18n.yaml
 +++ b/packages/host/webserver/README.i18n.yaml
 @@ -12,8 +12,8 @@
@@ -365,40 +274,40 @@ index 7a81b0a0db..f594557d1e 100644
  /deepseek-ai-dsh-host-webserver/table-of-contents:
 -  en: d152484eb41ac6b4
 -  zh: 09388d293f9be9cb
-+  en: c584ce2b287425f5
-+  zh: 608b79cbd23bd8d1
++  en: 485297e00c7223ee
++  zh: 25e1b34ce7b5d56e
  /deepseek-ai-dsh-host-webserver/use-this-package:
    en: 1998834973f7cf17
    zh: 63455a2f75d090ad
-@@ -51,8 +51,11 @@
+@@ -45,8 +45,11 @@
+   en: 4a0b809827d92cb3
+   zh: 609885ab34257ff1
+ /deepseek-ai-dsh-host-webserver/further-exploration:
+-  en: 75eae86778f0fc15
+-  zh: d87775b660e58c9f
++  en: 467fcec6fad8d56e
++  zh: eb4b1b86bcdedd85
++/deepseek-ai-dsh-host-webserver/fork-opt-in-wildcard-bind-dsh-02:
++  en: 64af3720687d91ea
++  zh: bb84a060988595cb
+ /deepseek-ai-dsh-host-webserver/model-experience:
    en: 38887e1f9117e7e5
    zh: 6a6e1a002fac4624
- /deepseek-ai-dsh-host-webserver/model-experience/kv-cache-effect:
--  en: ca75c51c89c2c9b0
--  zh: de54f3467ef3b9be
-+  en: 13f41b4c090d6a0a
-+  zh: 9106435637f61193
-+/deepseek-ai-dsh-host-webserver/fork-opt-in-wildcard-bind-dsh-02:
-+  en: 031c8260f84a42cb
-+  zh: 29a6af4afd2a6496
- /deepseek-ai-dsh-host-webserver/known-limitations-and-deferred-work:
-   en: 9aa6b8cf92d5b506
-   zh: 55ee3f6ad1cace50
 diff --git a/packages/host/webserver/README.md b/packages/host/webserver/README.md
-index 59313177e2..4846f36732 100644
+index 5288a1039b..be048985ab 100644
 --- a/packages/host/webserver/README.md
 +++ b/packages/host/webserver/README.md
-@@ -17,6 +17,7 @@ Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http`
+@@ -16,6 +16,7 @@ Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http`
+ - [Use this package](#use-this-package)
  - [Understand the implementation](#understand-the-implementation)
  - [Further Exploration](#further-exploration)
- - [Model Experience](#model-experience)
 +- [Fork opt-in: wildcard bind (dsh#02)](#fork-wildcard-host)
+ - [Model Experience](#model-experience)
  - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
  - [Dev Note](#dev-note)
+@@ -120,6 +121,20 @@ Read these when the server contract is not enough: the subsystem reference, then
  
-@@ -121,6 +122,20 @@ None, as the HTTP carrier bridges browser and API handler and registers nothing
- 
- None; this package neither assembles nor sends a provider request.
+ -----
  
 +<a id="fork-wildcard-host"></a>
 +## Fork opt-in: wildcard bind (dsh#02)
@@ -414,24 +323,24 @@ index 59313177e2..4846f36732 100644
 +      allowWildcardHost: true
 +```
 +
- ## Known Limitations and Deferred Work
+ <a id="model-experience"></a>
+ ## Model Experience
  
- <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/host/webserver/README.zh.md b/packages/host/webserver/README.zh.md
-index aa8cde6345..b6754a0e97 100644
+index 0fce2aac11..e2a04cd406 100644
 --- a/packages/host/webserver/README.zh.md
 +++ b/packages/host/webserver/README.zh.md
-@@ -17,6 +17,7 @@ kind: "package-reference"
+@@ -16,6 +16,7 @@ kind: "package-reference"
+ - [使用本包](#use-this-package)
  - [理解实现](#understand-the-implementation)
  - [进一步探索](#further-exploration)
++- [Fork 可选项：通配地址绑定（dsh#02)](#fork-wildcard-host)
  - [模型体验](#model-experience)
-+- [Fork 可选项：通配地址绑定（dsh#02）](#fork-wildcard-host)
  - [已知限制与延期工作](#known-limitations-and-deferred-work)
  - [开发备注](#dev-note)
+@@ -120,6 +121,20 @@ index 启动输入分两层，按页面所代表的 Peer 计算。`collectIndexI
  
-@@ -121,6 +122,20 @@ index 启动输入分两层，按页面所代表的 Peer 计算。`collectIndexI
- 
- 无；该包既不组装也不发送提供方请求。
+ -----
  
 +<a id="fork-wildcard-host"></a>
 +## Fork 可选项：通配地址绑定（dsh#02）
@@ -447,14 +356,14 @@ index aa8cde6345..b6754a0e97 100644
 +      allowWildcardHost: true
 +```
 +
- ## 已知限制与延期工作
+ <a id="model-experience"></a>
+ ## 模型体验
  
- <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/host/webserver/src/index.ts b/packages/host/webserver/src/index.ts
-index 6d613e8a49..730217b801 100644
+index 3ed162f3b4..abc2e83b79 100644
 --- a/packages/host/webserver/src/index.ts
 +++ b/packages/host/webserver/src/index.ts
-@@ -122,6 +122,38 @@ export interface Config {
+@@ -196,6 +196,40 @@ export interface Config {
    compressionLevel?: number
    /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
    compressionThresholdBytes?: number
@@ -484,6 +393,8 @@ index 6d613e8a49..730217b801 100644
 + * The wildcard rejection is stock behavior; only the dsh#02 fork opt-in lifts
 + * it. It runs at plugin load (the constructor) because it needs `host` and
 + * `fork` together, which a per-field schema transform cannot see.
++ * @param host - the configured bind address, a concrete IPv4 or IPv6 literal.
++ * @param fork - the fork opt-ins; `allowWildcardHost: true` lifts the wildcard rejection.
 + */
 +export function assertBindHost(host: string, fork?: ForkConfig): void {
 +  const parsed = parseIpLiteral(host)
@@ -493,7 +404,7 @@ index 6d613e8a49..730217b801 100644
  }
  
  const DEFAULT_COMPRESSION = 'none' as const
-@@ -359,9 +391,6 @@ export class WebServer extends Service {
+@@ -434,9 +468,6 @@ export class WebServer extends Service {
      host: z.transform(z.string(), (value) => {
        const parsed = parseIpLiteral(value)
        if (parsed === undefined) throw notLiteralError(value)
@@ -503,7 +414,7 @@ index 6d613e8a49..730217b801 100644
        return value
      }).required(),
      port: z.natural().max(65535).required(),
-@@ -373,6 +402,10 @@ export class WebServer extends Service {
+@@ -448,6 +479,10 @@ export class WebServer extends Service {
      compression: z.union([z.const('none'), z.const('gzip')]).default(DEFAULT_COMPRESSION),
      compressionLevel: z.number().step(1).min(0).max(9).default(DEFAULT_COMPRESSION_LEVEL),
      compressionThresholdBytes: z.natural().default(DEFAULT_COMPRESSION_THRESHOLD_BYTES),
@@ -514,7 +425,7 @@ index 6d613e8a49..730217b801 100644
    })
  
    private readonly exact = new Map<string, WebRoute | WebResourceRoute>()
-@@ -396,6 +429,7 @@ export class WebServer extends Service {
+@@ -471,6 +506,7 @@ export class WebServer extends Service {
  
    constructor(ctx: Context, private config: Config) {
      super(ctx, 'webServer')
@@ -523,7 +434,7 @@ index 6d613e8a49..730217b801 100644
      // Schemastery passes an explicit `tls: null` through; only a real object serves TLS.
      this.tlsConfig = resolved.tls ?? undefined
 diff --git a/packages/host/webserver/tests/webserver.spec.ts b/packages/host/webserver/tests/webserver.spec.ts
-index 783b0c86dc..4d3572d3c7 100644
+index 0ebf4abec8..713175e9f6 100644
 --- a/packages/host/webserver/tests/webserver.spec.ts
 +++ b/packages/host/webserver/tests/webserver.spec.ts
 @@ -23,7 +23,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
@@ -532,19 +443,19 @@ index 783b0c86dc..4d3572d3c7 100644
  import HttpServer, {
 -  bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig, type WebResource, type WebRoute,
 +  assertBindHost, bindUrlHost, isLoopbackHost, normalizeBindAddress, renderIndexInjections, type TlsConfig, type WebResource, type WebRoute,
+   type WebAuthRequest,
  } from '../src/index.ts'
  import { materializeTlsFixture, type TlsFixture } from './tls-fixture.ts'
- 
-@@ -262,7 +262,7 @@ describe('real Loader composition', () => {
+@@ -536,7 +536,7 @@ describe('real Loader composition', () => {
        '::ffff:0.0.0.0', '::ffff:0:0', '::ffff:0000:0000', '0:0:0:0:0:ffff:0:0',
        '0:0:0:0:0:ffff:0.0.0.0', '::ffff:0.0.0.0%eth0',
      ]) {
 -      expect(() => HttpServer.Config({ host, port: 0 })).toThrow(
-+      expect(() => assertBindHost(host)).toThrow(
++      expect(() => { assertBindHost(host) }).toThrow(
          /is an unspecified \(wildcard\) address, which is not supported/,
        )
      }
-@@ -272,6 +272,22 @@ describe('real Loader composition', () => {
+@@ -546,6 +546,22 @@ describe('real Loader composition', () => {
      }
    })
  
@@ -553,10 +464,10 @@ index 783b0c86dc..4d3572d3c7 100644
 +  it('accepts a wildcard bind only under the fork.allowWildcardHost opt-in', () => {
 +    for (const host of ['0.0.0.0', '::', '::ffff:0.0.0.0']) {
 +      expect(HttpServer.Config({ host, port: 0, fork: { allowWildcardHost: true } }).host).toBe(host)
-+      expect(() => assertBindHost(host, { allowWildcardHost: true })).not.toThrow()
-+      expect(() => assertBindHost(host, { allowWildcardHost: false }))
++      expect(() => { assertBindHost(host, { allowWildcardHost: true }) }).not.toThrow()
++      expect(() => { assertBindHost(host, { allowWildcardHost: false }) })
 +        .toThrow(/is an unspecified \(wildcard\) address, which is not supported/)
-+      expect(() => assertBindHost(host, undefined))
++      expect(() => { assertBindHost(host, undefined) })
 +        .toThrow(/is an unspecified \(wildcard\) address, which is not supported/)
 +    }
 +    // The opt-in lifts only the wildcard rule, never the literal rule.
@@ -567,6 +478,3 @@ index 783b0c86dc..4d3572d3c7 100644
    it('denies the IPv4-mapped wildcard through the real plugin load, not only the predicate', async () => {
      // The Loader is nontransactional: a rejected config leaves a FAILED fiber
      // whose await carries the schema error rather than rejecting loader.await().
--- 
-2.53.0
-

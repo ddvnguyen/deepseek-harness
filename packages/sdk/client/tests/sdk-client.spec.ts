@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import {
   DeepSeekHarness,
   HarnessClient,
@@ -314,7 +315,7 @@ describe('DeepSeekHarness', () => {
       cwd: dir,
       provider: 'custom-provider',
       model: 'custom-model',
-      reasoningEffort: ReasoningEffortId('max'),
+      reasoningEffort: brandString<ReasoningEffortId>('max'),
       maxTokens: 4096,
       approvalRequests: true,
     })
@@ -704,7 +705,12 @@ describe('HarnessClient', () => {
     inject('session.event', { sessionId: 'grandchild', event: { type: 'noop' } })
     inject('session.event', { sessionId: 'stranger', event: { type: 'noop' } })
     inject('subagent.started', { parentSessionId: 'other-root', childSessionId: 'other-child' })
+    const subtree = client.subscribeSessionTree('child')
+    inject('subagent.finished', { parentSessionId: 'root', childSessionId: 'child' })
     inject('subagent.finished', { parentSessionId: 'child', childSessionId: 'grandchild' })
+    expect((await subtree.next()).params.childSessionId).toBe('child')
+    expect((await subtree.next()).params).toMatchObject({ parentSessionId: 'child', childSessionId: 'grandchild' })
+    subtree.close()
     // Self-loop and empty edges must not corrupt the lineage map.
     inject('subagent.started', { parentSessionId: 'loop', childSessionId: 'loop' })
     inject('subagent.started', { parentSessionId: '', childSessionId: 'x' })
@@ -714,6 +720,7 @@ describe('HarnessClient', () => {
     expect((await tree.next()).method).toBe('subagent.started')
     expect((await tree.next()).method).toBe('subagent.started')
     expect((await tree.next()).params.sessionId).toBe('grandchild')
+    expect((await tree.next()).params.childSessionId).toBe('child')
     expect((await tree.next()).method).toBe('subagent.finished')
     // The foreign-root edge and stranger event were filtered; next is the root-child edge.
     expect((await tree.next()).params.childSessionId).toBe('root')

@@ -39,6 +39,7 @@ kind: "package-group"
 | [`ui-renderer/`](ui-renderer/README.zh.md) | 将 slot 数据绑定到 React，并挂载组装完成的应用 | `ctx.uiRenderer` |
 | [`ui-slots/`](ui-slots/README.zh.md) | 定义类型化扩展 Slots 与可复用 Component Factory | — |
 | [`ui-session/`](ui-session/README.zh.md) | 把会话控制器状态适配为标准 Slot source 与钩子 | — |
+| [`ui-session-status/`](ui-session-status/README.zh.md) | 在宿主内存中保存阅读提醒，并把运行状态、生效的待交互请求和共享提醒汇总为会话状态表，通过 `useSessionStatus` 提供 | `ctx.sessionStatus` / `ctx.uiSession.sessionStatus` |
 | [`ui-theme/`](ui-theme/README.zh.md) | 应用所选颜色主题 | — |
 | [`ui-primitives/`](ui-primitives/README.zh.md) | 提供共享 React 控件、图标与内容渲染器 | — |
 | [`ui-attachment/`](ui-attachment/README.zh.md) | 注册输入框与消息图片的附件呈现 | — |
@@ -64,6 +65,7 @@ kind: "package-group"
 | [`ui-skill/`](ui-skill/README.zh.md) | 向内联建议添加 skill（技能）引用 | — |
 | [`ui-reference/`](ui-reference/README.zh.md) | 统一的 Web `@file` / `@session` 引用 source | — |
 | [`ui-secret-mask/`](ui-secret-mask/README.zh.md) | 遮挡已发送用户文本中可识别的凭据 | — |
+| [`ui-agent-team/`](ui-agent-team/README.zh.md) | Session Team 开关与 Subagent 树下方的共享任务 | — |
 | [`ui-subagent/`](ui-subagent/README.zh.md) | 提供 subagent 导航、子级 transcript（文本记录）状态与内联引用 | — |
 | [`ui-jobs/`](ui-jobs/README.zh.md) | 列出本会话的后台任务，并提供按需展开的流式输出面板 | — |
 | [`ui-schedule/`](ui-schedule/README.zh.md) | 提供侧栏“自动化任务”页面与右侧栏任务页签，用于创建、编辑、立即运行、暂停、恢复和删除宿主的计划任务，并提供 Session 顶部时钟与行标记 | — |
@@ -80,7 +82,7 @@ kind: "package-group"
 | [`ui-settings-agent-loop/`](ui-settings-agent-loop/README.zh.md) | 在插件页提供 Agent 循环设置页 | — |
 | [`ui-settings-session-log/`](ui-settings-session-log/README.zh.md) | 在通用设置中控制随 API 上传会话日志 | — |
 | [`ui-settings-subagent/`](ui-settings-subagent/README.zh.md) | 在插件页提供子智能体设置页 | — |
-| [`ui-settings-web-search/`](ui-settings-web-search/README.zh.md) | 在插件页提供网页搜索设置页 | — |
+| [`ui-settings-web-search/`](ui-settings-web-search/README.zh.md) | 在插件页提供网页搜索与获取设置页 | — |
 | [`ui-plugin-manager/`](ui-plugin-manager/README.zh.md) | 贡献侧栏的“插件”面板：安装、启用、停用、重试与组合已安装的包 | — |
 | [`ui-entry-customization/`](ui-entry-customization/README.zh.md) | 添加分区域的“更多”菜单，固定或收起插件入口，并开始创建插件的草稿 | — |
 | [`ui-plugin-market/`](ui-plugin-market/README.zh.md) | 为“插件”页面贡献“发现”标签页：浏览市场索引并安装其中的组合包 | — |
