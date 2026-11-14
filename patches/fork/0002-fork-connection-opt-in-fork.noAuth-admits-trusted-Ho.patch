@@ -11,22 +11,12 @@ external perimeter (Cloudflare Access); PROD never sets it.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ---
- docs/config-catalog.md                        | 21 ++++++++
- docs/config-catalog.zh.md                     | 21 ++++++++
- packages/client/connection/README.i18n.yaml   | 11 ++--
- packages/client/connection/README.md          | 14 ++++++
- packages/client/connection/README.zh.md       | 14 ++++++
- packages/client/connection/src/index.ts       | 26 ++++++++++
- packages/client/connection/src/rpc-host.ts    | 15 +++++-
- .../connection/tests/node-half.host.spec.ts   | 50 +++++++++++++++++++
- 8 files changed, 167 insertions(+), 5 deletions(-)
-
 diff --git a/docs/config-catalog.md b/docs/config-catalog.md
-index 4dd81b281e..d4fa90e844 100644
+index caaa9d7a9b..a491807bf2 100644
 --- a/docs/config-catalog.md
 +++ b/docs/config-catalog.md
-@@ -476,6 +476,11 @@ export interface ConnectionConfig {
-   cookieMaxAgeDays?: number
+@@ -513,6 +513,11 @@ export interface ConnectionConfig {
+   trustedHosts?: string[]
    /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
    maxRequestBodyBytes?: number
 +  /**
@@ -37,7 +27,7 @@ index 4dd81b281e..d4fa90e844 100644
  }
  
  /** Timing for generation readiness and automatic reconnection. */
-@@ -494,6 +499,22 @@ export interface ConnectionRecoveryConfig {
+@@ -531,6 +536,22 @@ export interface ConnectionRecoveryConfig {
    /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
    generationReadyTimeoutMs?: number
  }
@@ -60,12 +50,55 @@ index 4dd81b281e..d4fa90e844 100644
  ```
  <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-connection -->
  
+@@ -1976,6 +1997,11 @@ export interface Config {
+   compressionLevel?: number
+   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
+   compressionThresholdBytes?: number
++  /**
++   * dsh#02 fork opt-ins; absent or false is stock behavior.
++   * @see ForkConfig
++   */
++  fork?: ForkConfig
+ }
+ 
+ /**
+@@ -1989,6 +2015,21 @@ export interface TlsConfig {
+   /** Private key file for the chain's leaf certificate; unencrypted PEM. */
+   keyFile: string
+ }
++
++/**
++ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
++ * the stock upstream behavior, so a deployment must name it in its own config
++ * for the fork to differ from upstream.
++ */
++export interface ForkConfig {
++  /**
++   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
++   * it at load. Binding every interface is safe only behind an external
++   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
++   * sets it. @default false
++   */
++  allowWildcardHost?: boolean
++}
+ ```
+ <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
+ 
+@@ -3236,7 +3277,7 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+ 
+ ## `@deepseek-ai/dsh-session-persistence-jsonl`
+ 
+-- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:95`](../packages/session/session-persistence-jsonl/src/index.ts)
++- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:97`](../packages/session/session-persistence-jsonl/src/index.ts)
+ 
+ ```ts config-catalog
+ /** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
 diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
-index 3fc583b03a..147015227b 100644
+index 51d86a27b8..405a91dc04 100644
 --- a/docs/config-catalog.zh.md
 +++ b/docs/config-catalog.zh.md
-@@ -478,6 +478,11 @@ export interface ConnectionConfig {
-   cookieMaxAgeDays?: number
+@@ -515,6 +515,11 @@ export interface ConnectionConfig {
+   trustedHosts?: string[]
    /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
    maxRequestBodyBytes?: number
 +  /**
@@ -76,7 +109,7 @@ index 3fc583b03a..147015227b 100644
  }
  
  /** Timing for generation readiness and automatic reconnection. */
-@@ -496,6 +501,22 @@ export interface ConnectionRecoveryConfig {
+@@ -533,6 +538,22 @@ export interface ConnectionRecoveryConfig {
    /** Deadline in ms for readiness, including physical connection setup. Default: 15000. */
    generationReadyTimeoutMs?: number
  }
@@ -99,8 +132,51 @@ index 3fc583b03a..147015227b 100644
  ```
  <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-connection -->
  
+@@ -1978,6 +1999,11 @@ export interface Config {
+   compressionLevel?: number
+   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
+   compressionThresholdBytes?: number
++  /**
++   * dsh#02 fork opt-ins; absent or false is stock behavior.
++   * @see ForkConfig
++   */
++  fork?: ForkConfig
+ }
+ 
+ /**
+@@ -1991,6 +2017,21 @@ export interface TlsConfig {
+   /** Private key file for the chain's leaf certificate; unencrypted PEM. */
+   keyFile: string
+ }
++
++/**
++ * Switches that only the dsh#02 fork patch series adds. Every one defaults to
++ * the stock upstream behavior, so a deployment must name it in its own config
++ * for the fork to differ from upstream.
++ */
++export interface ForkConfig {
++  /**
++   * Accept the unspecified bind address (`0.0.0.0`, `::`) instead of rejecting
++   * it at load. Binding every interface is safe only behind an external
++   * perimeter and the connection plugin's `trustedHosts` Host fence; PROD never
++   * sets it. @default false
++   */
++  allowWildcardHost?: boolean
++}
+ ```
+ <!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-webserver -->
+ 
+@@ -3238,7 +3279,7 @@ export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+ 
+ ## `@deepseek-ai/dsh-session-persistence-jsonl`
+ 
+-- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:95`](../packages/session/session-persistence-jsonl/src/index.ts)
++- `source`: [`packages/session/session-persistence-jsonl/src/index.ts:97`](../packages/session/session-persistence-jsonl/src/index.ts)
+ 
+ ```ts config-catalog
+ /** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
 diff --git a/packages/client/connection/README.i18n.yaml b/packages/client/connection/README.i18n.yaml
-index c3032532d7..937e37b0b6 100644
+index fbd1c96e9b..dc6addd75f 100644
 --- a/packages/client/connection/README.i18n.yaml
 +++ b/packages/client/connection/README.i18n.yaml
 @@ -12,8 +12,8 @@
@@ -109,45 +185,45 @@ index c3032532d7..937e37b0b6 100644
  /deepseek-ai-dsh-client-connection/table-of-contents:
 -  en: 18792bf2fb4f8030
 -  zh: 84c63acc7e0099ae
-+  en: f6bccb54d468c1e9
-+  zh: 73070e47a7d59d29
++  en: 56f44c2e3ff223a0
++  zh: 08913e97ca2708eb
  /deepseek-ai-dsh-client-connection/use-this-package:
-   en: da6810858bf74a86
-   zh: d623e510ec74520f
-@@ -27,8 +27,11 @@
+   en: 3dc9527a0e2c958b
+   zh: 7411a438013111af
+@@ -21,8 +21,11 @@
+   en: 22e629db9745aae9
+   zh: 7004b8b10f2f031d
+ /deepseek-ai-dsh-client-connection/connection-generation:
+-  en: d9fe48c025ace7ce
+-  zh: 0e23b299fbf25ae6
++  en: caaa72b98b9d93ae
++  zh: a20ad439598483c2
++/deepseek-ai-dsh-client-connection/fork-opt-in-no-auth-launch-dsh-02:
++  en: cd402ed667e32263
++  zh: a5f7427f1b978e08
+ /deepseek-ai-dsh-client-connection/model-experience:
    en: 88bbc33fe9ae9df8
    zh: bfbab6d51b4abd40
- /deepseek-ai-dsh-client-connection/model-experience/kv-cache-effect:
--  en: ca75c51c89c2c9b0
--  zh: de54f3467ef3b9be
-+  en: 9b6d35ab97d98c74
-+  zh: ac8a1a4b438798dc
-+/deepseek-ai-dsh-client-connection/fork-opt-in-no-auth-launch-dsh-02:
-+  en: 6162110b0a5c7260
-+  zh: cf201bcd45a48a10
- /deepseek-ai-dsh-client-connection/known-limitations-and-deferred-work:
-   en: a860aa95302e4f02
-   zh: 4df79a08b5fe018e
 diff --git a/packages/client/connection/README.md b/packages/client/connection/README.md
-index e6de487bdb..82f248b6b6 100644
+index 639e0c531a..c1e985836a 100644
 --- a/packages/client/connection/README.md
 +++ b/packages/client/connection/README.md
-@@ -17,6 +17,7 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
+@@ -16,6 +16,7 @@ The package carries browser-to-Host Remote calls, exact Fetch responses, and con
+ - [Use this package](#use-this-package)
  - [Browser authentication and request trust](#browser-authentication-and-request-trust)
  - [Connection generation](#connection-generation)
- - [Model Experience](#model-experience)
 +- [Fork opt-in: no-auth launch (dsh#02)](#fork-no-auth)
+ - [Model Experience](#model-experience)
  - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
  - [Dev Note](#dev-note)
+@@ -66,6 +67,19 @@ An ended `$events` stream, a Remote stream error, a non-ready opening item, or a
+ Set the Host Connection row's `config.recovery` to override retry caps, the growth factor, or handshake warning and cancellation times; the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-client-connection) lists accepted fields. The Host validates these values and injects them into each served page. The Client validates the bootstrap data before providing Connection and uses those defaults when Gateway starts its loop; explicit `start()` timing overrides take precedence. The growth factor must be finite and at least one. Readiness, failure, cancellation, or a hard deadline that occurs before the warning cancels that warning. Reload the page after changing Host recovery configuration.
  
-@@ -73,6 +74,19 @@ None, as the wire consumer layer moves already-composed messages between browser
- 
- None; this package neither assembles nor sends a provider request.
  
 +<a id="fork-no-auth"></a>
 +## Fork opt-in: no-auth launch (dsh#02)
 +
-+`fork.noAuth` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`. Set on the `connection` row, it makes `GET /` serve `index.html` and `/api` admit the owner browser Peer without a launch token or browser cookie, and it ignores any `?token=` on the index URL. **This removes cookie authentication.** It is meant for a deployment whose perimeter (for example Cloudflare Access) already authenticates every browser. The Host/Origin fence stays the gate: a request is admitted only when its `Host` is loopback, the listener's bind IP, or a `trustedHosts` entry, and an untrusted `Host` (or a cross-site `Origin`) is still refused with 403 and never reaches the Peer. PROD does not set it. Because a patch replaces the row's whole `config`, restate the invocation authorities:
++`fork.noAuth` is a switch only the dsh#02 fork patch series adds; upstream behavior is the default and is unchanged when it is absent or `false`. Set on the `connection` row, it makes `GET /` serve `index.html` and `/api` admit the owner browser Peer without a launch token or browser cookie, and it ignores any `?token=` on the index URL. **This removes cookie authentication.** It is meant for a deployment whose perimeter (for example Cloudflare Access) already authenticates every browser. The Host/Origin fence stays the gate: a request is admitted only when its `Host` is loopback, the listener's bind IP, or a `trustedHosts` entry, and an untrusted `Host` (or a cross-site `Origin`) is still refused with 403 and never reaches the Peer. PROD does not set it. Because the patch replaces the whole row's `config`, the trusted hosts in effect must be written out again:
 +
 +```yaml
 +- id: connection
@@ -157,24 +233,24 @@ index e6de487bdb..82f248b6b6 100644
 +      noAuth: true
 +```
 +
- ## Known Limitations and Deferred Work
+ <a id="model-experience"></a>
+ ## Model Experience
  
- <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/client/connection/README.zh.md b/packages/client/connection/README.zh.md
-index 5b57792975..618a61ccb5 100644
+index 8831b87472..3828fefd97 100644
 --- a/packages/client/connection/README.zh.md
 +++ b/packages/client/connection/README.zh.md
-@@ -17,6 +17,7 @@ kind: "package-reference"
+@@ -16,6 +16,7 @@ kind: "package-reference"
+ - [使用本包](#use-this-package)
  - [浏览器认证与请求信任](#browser-authentication-and-request-trust)
  - [Connection generation](#connection-generation)
++- [Fork 可选项：免认证启动（dsh#02)](#fork-no-auth)
  - [模型体验](#model-experience)
-+- [Fork 可选项：免认证启动（dsh#02）](#fork-no-auth)
  - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
  - [开发备注](#dev-note)
+@@ -66,6 +67,19 @@ Token 插件拥有供 API 调用方使用的 `GET /connect?token=...&interaction
+ 可通过 Host Connection 行的 `config.recovery` 覆盖重试上限、增长因子或握手告警与取消时间；[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-client-connection)列出接受的字段。Host 校验这些值，并将其注入所提供的每个页面。Client 在提供 Connection 前校验启动数据，并在 Gateway 启动循环时采用这些默认值；显式传给 `start()` 的时序覆盖优先。增长因子必须是至少为一的有限数。若就绪、失败、取消或硬期限先于告警发生，该告警会被取消。修改 Host 恢复配置后需重新加载页面。
  
-@@ -73,6 +74,19 @@ HTTPS cookie 名称与签名 audience 包含 `https:` scheme，因此即使 host
- 
- 无；该包既不组装也不发送提供方请求。
  
 +<a id="fork-no-auth"></a>
 +## Fork 可选项：免认证启动（dsh#02）
@@ -189,15 +265,15 @@ index 5b57792975..618a61ccb5 100644
 +      noAuth: true
 +```
 +
- ## 已知限制与暂缓事项
+ <a id="model-experience"></a>
+ ## 模型体验
  
- <a id="known-limitations-and-deferred-work"></a>
 diff --git a/packages/client/connection/src/index.ts b/packages/client/connection/src/index.ts
-index d563cd40e8..3e1d127c79 100644
+index d7ead5c0fb..4136f38382 100644
 --- a/packages/client/connection/src/index.ts
 +++ b/packages/client/connection/src/index.ts
-@@ -107,6 +107,27 @@ export interface ConnectionConfig {
-   cookieMaxAgeDays?: number
+@@ -101,12 +101,37 @@ export interface ConnectionConfig {
+   trustedHosts?: string[]
    /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
    maxRequestBodyBytes?: number
 +  /**
@@ -224,9 +300,8 @@ index d563cd40e8..3e1d127c79 100644
  }
  
  export const Config: z<ConnectionConfig> = z.object({
-@@ -114,6 +135,10 @@ export const Config: z<ConnectionConfig> = z.object({
+   recovery: ConnectionRecoveryConfigSchema.default({}),
    trustedHosts: z.array(String).default([]),
-   cookieMaxAgeDays: z.natural().min(1).default(30),
    maxRequestBodyBytes: z.natural().min(1).default(DEFAULT_MAX_REQUEST_BODY_BYTES),
 +  // Omitted stays omitted, so the stock resolved config is unchanged.
 +  fork: z.object({
@@ -235,64 +310,62 @@ index d563cd40e8..3e1d127c79 100644
  })
  
  /**
-@@ -137,6 +162,7 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
-     ctx,
-     trustedHosts,
-     await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
-+    config?.fork?.noAuth === true,
-   )
-   ctx.inject(['webServer'], (webCtx) => {
-     assertImageBodyCapacity(webCtx, maxRequestBodyBytes)
+@@ -127,7 +152,7 @@ export function apply(ctx: Context, config?: ConnectionConfig): void {
+   assertImageBodyCapacity(ctx, maxRequestBodyBytes)
+   new ConnectionAuthentication(ctx)
+   ctx.inject(['connection.authentication'], (connectionCtx) => {
+-    const connection = new HostConnectionService(connectionCtx, trustedHosts)
++    const connection = new HostConnectionService(connectionCtx, trustedHosts, config?.fork?.noAuth === true)
+     connectionCtx.inject(['webServer'], (webCtx) => {
+       assertImageBodyCapacity(webCtx, maxRequestBodyBytes)
+       webCtx.on('webserver/index-inject', (table) => {
 diff --git a/packages/client/connection/src/rpc-host.ts b/packages/client/connection/src/rpc-host.ts
-index 88e7b48baa..68483e5681 100644
+index 6801402cde..51f795a848 100644
 --- a/packages/client/connection/src/rpc-host.ts
 +++ b/packages/client/connection/src/rpc-host.ts
-@@ -83,11 +83,13 @@ export class HostConnectionService extends Service implements HostConnectionHand
+@@ -70,10 +70,12 @@ export class HostConnectionService extends Service implements HostConnectionHand
+    * Provide the Host half over the active HTTP server.
     * @param ctx - owning Connection plugin context.
     * @param trustedHosts - deployment authorities accepted by the Host/Origin fence.
-    * @param browserAuth - process token and persistent browser-session owner.
-+   * @param noAuth - dsh#02 fork opt-in: a Host-fenced request needs no token or cookie.
++   * @param noAuth - allow a trusted request to use the owner peer without credentials.
     */
    constructor(
      ctx: Context,
      private readonly trustedHosts: readonly string[],
-     private readonly browserAuth: BrowserAuth,
 +    private readonly noAuth = false,
    ) {
      super(ctx, 'connection')
      this.owner = ctx
-@@ -133,7 +135,10 @@ export class HostConnectionService extends Service implements HostConnectionHand
-     if (this.browserAuth.isAuthenticated(request, secure)) return { peer: this.browserPeer }
-     const id = this.browserAuth.authenticateApi(request, secure)
-     const record = id === undefined ? undefined : this.peers.get(id)
--    return record === undefined ? { rejection: 401 } : { peer: record.peer }
-+    if (record !== undefined) return { peer: record.peer }
-+    // dsh#02 fork.noAuth: the Host fence above is the only gate; the request
-+    // shares the owner browser Peer a cookie-authenticated browser would get.
-+    return this.noAuth ? { peer: this.browserPeer } : { rejection: 401 }
-   }
- 
-   /** Create one in-process Peer owned by the Context that read this service. */
-@@ -191,6 +196,14 @@ export class HostConnectionService extends Service implements HostConnectionHand
-    * Authenticate an index request; native TLS listeners mint Secure cookies.
-    */
-   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
+@@ -88,6 +90,12 @@ export class HostConnectionService extends Service implements HostConnectionHand
+       const facts = { ...request, url: request.url.href }
+       if (!this.isTrustedRequest(facts)) return { kind: 'deny', status: 403 }
+       if (policy === 'anonymous') return { kind: 'allow' }
++      if (this.noAuth) {
++        if (this.disposed || facts.signal?.aborted || facts.socket?.destroyed || this.browserPeer.signal.aborted) {
++          return { kind: 'deny', status: 401 }
++        }
++        return { kind: 'allow', peer: this.browserPeer }
++      }
+       const admission = this.authentication.authenticate(facts)
+       return 'rejection' in admission
+         ? { kind: 'deny', status: admission.rejection }
+@@ -117,6 +125,11 @@ export class HostConnectionService extends Service implements HostConnectionHand
+   admit(request: ConnectionTrustRequest): PeerAdmission {
+     if (!this.isTrustedRequest(request)) return { rejection: 403 }
+     if (this.disposed) return { rejection: 401 }
 +    if (this.noAuth) {
-+      // dsh#02 fork.noAuth: serve the index to any Host the fence trusts, with
-+      // or without a token; an untrusted Host is refused outright.
-+      if (this.isTrusted(request)) return true
-+      response.writeHead(403, { 'cache-control': 'no-store', 'content-type': 'text/plain; charset=utf-8' })
-+      response.end(request.method === 'HEAD' ? undefined : 'forbidden')
-+      return false
++      return request.signal?.aborted || request.socket?.destroyed || this.browserPeer.signal.aborted
++        ? { rejection: 401 }
++        : { peer: this.browserPeer }
 +    }
-     return this.browserAuth.authorizeIndex(request, response, this.ctx.get('webServer')?.protocol === 'https:')
+     return this.authentication.authenticate(request)
    }
  
 diff --git a/packages/client/connection/tests/node-half.host.spec.ts b/packages/client/connection/tests/node-half.host.spec.ts
-index 8be225209f..f449ba0434 100644
+index 7101523c97..a76b316b67 100644
 --- a/packages/client/connection/tests/node-half.host.spec.ts
 +++ b/packages/client/connection/tests/node-half.host.spec.ts
-@@ -962,3 +962,53 @@ describe('connection node half over a real HTTP server', () => {
+@@ -1074,3 +1074,61 @@ describe('connection node half over a real HTTP server', () => {
      }
    })
  })
@@ -305,10 +378,8 @@ index 8be225209f..f449ba0434 100644
 +
 +  it('stays stock by default: no token or cookie means 401 on the index and the API', async () => {
 +    for (const config of [trusted, { ...trusted, fork: { noAuth: false } }]) {
-+      const { connection, dispose } = await mounted(config)
-+      const index = fakeResponse()
-+      expect(connection.authorizeIndex(fakeRequest({ host: 'harness.example' }, '/'), index.response)).toBe(false)
-+      expect(index.state.status).toBe(401)
++      const { ctx, connection, dispose } = await mounted(config)
++      expect(ctx.bail('webserver/authorize', { headers: { host: 'harness.example' }, method: 'GET', url: new URL('http://harness.example/'), transport: 'http' }, 'required')).toEqual({ kind: 'deny', status: 401 })
 +      expect(connection.admit(fakeRequest({ host: 'harness.example' }))).toEqual({ rejection: 401 })
 +      expect(connection.admit(fakeRequest({ host: '127.0.0.1:3080' }))).toEqual({ rejection: 401 })
 +      await dispose()
@@ -316,27 +387,37 @@ index 8be225209f..f449ba0434 100644
 +  })
 +
 +  it('serves the index and admits the owner Peer to a trusted Host with no token or cookie', async () => {
-+    const { connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
++    const { ctx, connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
 +    for (const host of ['harness.example', '127.0.0.1:3080', 'localhost']) {
-+      const index = fakeResponse()
-+      expect(connection.authorizeIndex(fakeRequest({ host }, '/'), index.response)).toBe(true)
-+      expect(index.state.status).toBeUndefined()
++      expect(ctx.bail('webserver/authorize', { headers: { host }, method: 'GET', url: new URL(`http://${host}/`), transport: 'http' }, 'required')).toEqual({ kind: 'allow', peer: connection.browserPeer })
 +      expect(connection.admit(fakeRequest({ host }))).toEqual({ peer: connection.browserPeer })
 +    }
 +    // A stale or wrong ?token= URL (a restart changes the process token) must
 +    // not lock a no-auth deployment out of its own index.
-+    const stale = fakeResponse()
-+    expect(connection.authorizeIndex(fakeRequest({ host: 'harness.example' }, '/?token=stale'), stale.response)).toBe(true)
++    expect(ctx.bail('webserver/authorize', { headers: { host: 'harness.example' }, method: 'GET', url: new URL('http://harness.example/?token=stale'), transport: 'http' }, 'required')).toEqual({ kind: 'allow', peer: connection.browserPeer })
++    const staleResponse = fakeResponse()
++    const next = vi.fn(async () => {})
++    await ctx.waterfall('webserver/request', fakeRequest({ host: 'harness.example' }, '/?token=stale'), staleResponse.response, next)
++    expect(next).toHaveBeenCalledOnce()
++    expect(staleResponse.state.status).toBeUndefined()
++    const controller = new AbortController()
++    controller.abort()
++    expect(ctx.bail('webserver/authorize', { headers: { host: 'harness.example' }, url: new URL('http://harness.example/'), transport: 'http', signal: controller.signal }, 'required')).toEqual({ kind: 'deny', status: 401 })
++    expect(connection.admit({ headers: { host: 'harness.example' }, signal: controller.signal })).toEqual({ rejection: 401 })
 +    await dispose()
 +  })
 +
 +  it('still rejects an untrusted Host with the flag on: no cookie, no owner Peer, no index', async () => {
-+    const { connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
-+    const index = fakeResponse()
-+    expect(connection.authorizeIndex(fakeRequest({ host: 'evil.example' }, '/'), index.response)).toBe(false)
-+    expect(index.state.status).toBe(403)
-+    expect(index.state.headers?.['set-cookie']).toBeUndefined()
++    const { ctx, connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
++    expect(ctx.bail('webserver/authorize', { headers: { host: 'evil.example' }, method: 'GET', url: new URL('http://evil.example/'), transport: 'http' }, 'required')).toEqual({ kind: 'deny', status: 403 })
++    const tokenResponse = fakeResponse()
++    const next = vi.fn(async () => {})
++    await ctx.waterfall('webserver/request', fakeRequest({ host: 'evil.example' }, '/?token=stale'), tokenResponse.response, next)
++    expect(tokenResponse.state.status).toBe(403)
++    expect(next).not.toHaveBeenCalled()
 +    expect(connection.admit(fakeRequest({ host: 'evil.example' }))).toEqual({ rejection: 403 })
++    // A HEAD probe of the untrusted index gets the same refusal without a body.
++    expect(ctx.bail('webserver/authorize', { headers: { host: 'evil.example' }, method: 'HEAD', url: new URL('http://evil.example/'), transport: 'http' }, 'required')).toEqual({ kind: 'deny', status: 403 })
 +    // The cross-site fence applies as well: a trusted Host with a cross-site
 +    // marker or a foreign Origin is not admitted.
 +    expect(connection.admit(fakeRequest({ host: 'harness.example', 'sec-fetch-site': 'cross-site' })))
@@ -346,6 +427,37 @@ index 8be225209f..f449ba0434 100644
 +    await dispose()
 +  })
 +})
--- 
-2.53.0
-
+diff --git a/packages/host/authentication-token/src/index.ts b/packages/host/authentication-token/src/index.ts
+index 9f9ab61f89..34c1b36459 100644
+--- a/packages/host/authentication-token/src/index.ts
++++ b/packages/host/authentication-token/src/index.ts
+@@ -57,6 +57,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
+         await next()
+         return
+       }
++      const admission = webCtx.connection.admit(facts)
++      if ('rejection' in admission && admission.rejection === 403) {
++        response.writeHead(403)
++        response.end('forbidden')
++        return
++      }
++      if ('peer' in admission && admission.peer === webCtx.connection.browserPeer) {
++        await next()
++        return
++      }
+       auth.authorizeIndex(request, response, webCtx.webServer.protocol === 'https:')
+     })
+     webCtx.effect(() => webCtx.webServer.register({
+diff --git a/packages/host/authentication-token/tests/plugin.host.spec.ts b/packages/host/authentication-token/tests/plugin.host.spec.ts
+index 64491314ce..09c3af7916 100644
+--- a/packages/host/authentication-token/tests/plugin.host.spec.ts
++++ b/packages/host/authentication-token/tests/plugin.host.spec.ts
+@@ -38,7 +38,7 @@ async function mounted(secure = false, before?: (ctx: Context) => void) {
+     },
+     fetch: { register() { throw new Error('Fetch routes are outside this fixture') } },
+     createSharedFetchHandler() { throw new Error('Fetch dispatch is outside this fixture') },
+-    admit() { throw new Error('Combined admission is outside this fixture') },
++    admit() { return { rejection: 401 } },
+     createPeer,
+   }
+   ctx.provide('credentials', new RecordCredentials())
