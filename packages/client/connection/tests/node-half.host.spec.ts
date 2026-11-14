@@ -1115,6 +1115,11 @@ describe('connection node half: fork.noAuth (dsh#02)', () => {
   it('still rejects an untrusted Host with the flag on: no cookie, no owner Peer, no index', async () => {
     const { ctx, connection, dispose } = await mounted({ ...trusted, fork: { noAuth: true } })
     expect(ctx.bail('webserver/authorize', { headers: { host: 'evil.example' }, method: 'GET', url: new URL('http://evil.example/'), transport: 'http' }, 'required')).toEqual({ kind: 'deny', status: 403 })
+    const tokenResponse = fakeResponse()
+    const next = vi.fn(async () => {})
+    await ctx.waterfall('webserver/request', fakeRequest({ host: 'evil.example' }, '/?token=stale'), tokenResponse.response, next)
+    expect(tokenResponse.state.status).toBe(403)
+    expect(next).not.toHaveBeenCalled()
     expect(connection.admit(fakeRequest({ host: 'evil.example' }))).toEqual({ rejection: 403 })
     // A HEAD probe of the untrusted index gets the same refusal without a body.
     expect(ctx.bail('webserver/authorize', { headers: { host: 'evil.example' }, method: 'HEAD', url: new URL('http://evil.example/'), transport: 'http' }, 'required')).toEqual({ kind: 'deny', status: 403 })

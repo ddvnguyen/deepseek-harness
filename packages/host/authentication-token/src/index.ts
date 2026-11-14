@@ -58,6 +58,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         return
       }
       const admission = webCtx.connection.admit(facts)
+      if ('rejection' in admission && admission.rejection === 403) {
+        response.writeHead(403)
+        response.end('forbidden')
+        return
+      }
       if ('peer' in admission && admission.peer === webCtx.connection.browserPeer) {
         await next()
         return
