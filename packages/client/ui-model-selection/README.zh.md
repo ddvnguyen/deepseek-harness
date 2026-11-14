@@ -49,7 +49,7 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 
 `conversation.input.model.label` 是会话作用域的内联 `single` slot，覆盖 composer 触发按钮（`placement: 'trigger'`）、根菜单中的当前值（`'menu'`）和各模型选项（`'option'`）。owner props 提供 `provider: { id, name }`、准确的目录 `model`、`placement` 和 `selected`。提供方名称是本地化显示名称；按 `provider.id` 匹配渠道，按提供方与模型 ID 的组合识别模型。slot 不接收连接 URL 或凭据。
 
-扩展必须渲染非交互的内联内容，例如带颜色的名称或徽标。选择器负责点击、搜索、焦点、禁用状态、勾选标记、推理强度和触发按钮的无障碍文字。没有扩展（包括插件卸载后）时显示目录名称；模型带有目录角标 `model.badge` 时，触发按钮在名称前显示一个按角标语调着色的 `Tag`，菜单仍放在名称后，文字按当前语言解析。较长的目录名称会在可用宽度内省略，角标保持可见。扩展会同时替换两者，并从 owner props 收到角标。触发按钮和根菜单当前值仅在所选模型存在于显示目录中时调用 slot，否则保留内置占位文字。刷新期间保留的目录条目仍调用 slot。菜单打开时会跟随名称内容的尺寸变化调整位置，保持在视口内。`/model` 命令行使用命令弹窗独立的渲染 API。
+扩展必须渲染非交互的内联内容，例如带颜色的名称或徽标。选择器负责点击、搜索、焦点、禁用状态、勾选标记、推理强度和触发按钮的无障碍文字。没有扩展（包括插件卸载后）时显示目录名称；模型带有目录角标 `model.badge` 时，触发按钮在名称前显示一个按角标语调着色的 `Tag`，菜单仍放在名称后，文字按当前语言解析。较长的目录名称会在可用宽度内省略，角标保持可见。扩展会同时替换两者，并从 owner props 收到角标。触发按钮和根菜单当前值仅在所选模型存在于显示目录中时调用 slot，否则保留内置占位文字。刷新期间保留的目录条目仍调用 slot。输入框的模型菜单通过 CSS 锚点跟随触发按钮及标签大小变化，并按布局视口排版。双指缩放时菜单随页面一起缩放，可以超出视觉视口，包括键盘打开时。`/model` 命令行使用命令弹窗独立的渲染 API。
 
 以 type-only 方式导入本包的 `/client` 声明，再通过 `ctx.slots.inject('conversation.input.model.label', () => ctx.slots.register({ name: 'conversation.input.model.label' }, ModelLabel))` 注册。`ModelLabel` 的 props 从 `PropsRuntime<'conversation.input.model.label'>` 派生；用提供方 ID 选择 CSS Module 类，并保留 `model.name` 作为文字。注册随声明和贡献插件的生命周期清理。不替换组件时，样式也可以在三个显示位置通过名称外层的 `data-provider-id` 和 `data-model-id` 属性定位。
 
@@ -61,17 +61,19 @@ composer 菜单中的模型名称和推理等级均使用 400（regular）字重
 
 当会话被其他写句柄占用时，模型选择失败提示用户退出其他正在运行的 DSH 后重试。
 
+会话级列表 slot `conversation.input.model.options` 在模型与推理等级选项下方追加控件。贡献项调用 `openPane({ key, title })`，显示注册到会话级 keyed slot `conversation.input.model.pane` 的内容；入口按钮的 `data-model-menu-pane` 必须与注册键一致。一级与二级贡献项均收到 `locked`、`reportFailure(message)` 和 `dismiss()`：锁定包含模型或推理等级保存中状态，失败由菜单宿主的 toast 提示，关闭时同步聚焦触发按钮，供贡献方随后打开其他浮层。设置与确认逻辑由贡献插件负责。一级与二级面板共用 240px 宽度，并保持视口两侧的 12px 边距；模型与推理等级列表仍按内容定宽。菜单把二级面板呈现为以 `title` 命名的分组；面板自行设置初始焦点，未设置时焦点停留在菜单容器上。Escape 将焦点还给入口行；Tab 关闭二级面板而不激活开关。
+
 -----
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。composer 菜单通过 body portal 使用 fixed 定位。`useAnchoredPosition` 统一触发按钮的 fixed 定位坐标，并在滚动、窗口缩放、可见视口变化和菜单尺寸变化时更新位置。打开菜单和切换面板时，在绘制前同步完成测量和定位。菜单默认在按钮上方展开、右边缘对齐、间距为 8px；两个方向均可移动以保留 12px 视口边距，但不会翻转到按钮下方。面板尺寸不超过可见视口，键盘打开时也遵循此限制。模型名称超出面板宽度时以省略号截断，角标保持可见。模型与推理等级列表在面板高度限制内纵向滚动。
+菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。composer 菜单通过 body portal 使用 fixed 定位及 CSS Anchor Positioning，要求浏览器支持 `anchor-name`、`position-anchor` 和 `anchor()`。触发按钮和菜单共享唯一的锚点名称。CSS 优先将菜单放在按钮上方，右边缘对齐、间距为 8px，并将菜单限制在布局视口的 12px 内边距及桌面窗口边框间距内。桌面页面缩放导致 sticky 输入区重新布局时，面板仍保持与触发器的间距。定位不通过 JavaScript 读取按钮矩形或追踪视口变化。双指缩放时菜单随页面一起缩放，可以超出视觉视口，包括键盘打开时。模型名称超出面板宽度时以省略号截断，角标保持可见。模型与推理等级列表在面板高度限制内纵向滚动。
 
 <details>
 <summary>实现细节——点击展开</summary>
 
-composer 的 `ModelSelect` 与 `/model` 选项构建器共用[提供方排序](src/client/provider-order.ts)，两个搜索框均在每个提供方内使用 `rankByName`。命令通过 [popupSelect API](../ui-commands/README.zh.md#use-this-package) 提供可选分组与 `searchMode: 'fuzzy-label'`；两个入口均使用 `MenuGroup`，并在渲染分组变化时重建其吸顶观察器。命令弹窗撑满 composer 浮层，按钮则保留紧凑菜单。
+composer 的 `ModelSelect` 与 `/model` 选项构建器共用[提供方排序](src/client/provider-order.ts)，两个搜索框均在每个提供方内使用共享的[文本搜索](../../util/text-search/README.zh.md)。命令通过 [popupSelect API](../ui-commands/README.zh.md#use-this-package) 提供可选分组；两个入口均使用 `MenuGroup`，并在渲染分组变化时重建其吸顶观察器。命令弹窗撑满 composer 浮层，按钮则保留紧凑菜单。
 
 两个入口共用一份由 `ModelDirectoryResolver`（`ctx.modelDirectories`）持有的会话级目录：`/model` popupSelect 贡献项（经 `ctx.commandUi` 注册）与 composer 的具名 `conversation.input.model` 位都经 `session.models` 加载会话的可用目录、经 `session.selectModel` 通过同一个 `ModelDirectory` 实例提交，因此任一入口所做的切换正是另一个入口接下来显示的。目录加载与选择共享一个代次计数器，旧响应不会覆盖新结果。目录把最近一次提交的选择发布为 `pending`，直到它完成或被连接重置作废；连接重置丢弃所有常驻投影，并在显示前重新拉取 Host 恢复的选择。目录按会话惰性解析，随会话作用域一并 dispose（资源释放）；已寻址 subagent 会话不公开任一入口。每份常驻目录都会直接在转发的 `llm/adapters-updated`、`llm/models-updated`、`settings/document-updated` 与凭据更新事件上重拉。
 

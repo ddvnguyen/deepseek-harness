@@ -209,7 +209,7 @@ Host 重启后，Session 重开时 Remote 层会恢复根 agent。之后的迟�
 
 ## 错误
 
-`UserQuestionError` 继承 `HarnessError`，因此 `ctx.tools.execute()` 会保留 `{ name, code }`，用于面向模型的工具失败，如 `EMPTY_QUESTIONS`、`BAD_INTENT`、`NO_PROVIDER`、`ASK_ABORTED` 或 UI 侧取消。
+`UserQuestionError` 继承 `HarnessError`，因此 `ctx.tools.execute()` 会保留 `{ name, code }`，用于面向模型的工具失败，如 `EMPTY_QUESTIONS`、`BAD_INTENT`、`NO_PROVIDER`、`ASK_ABORTED` 或 UI 侧取消。不是 `HarnessError` 的应答方失败会变为 `PROVIDER_ERROR`，保留原 message，原错误作为 `cause`；其他 `HarnessError` 保留自身的 `name` 与 `code`。
 
 ```ts type-equiv
 /** Stable error taxonomy for user-questions failures. */
@@ -278,17 +278,19 @@ async askTimed( request: AskUserQuestionRequest & { agent: Agent }, callId: Tool
  * Ask the scoped answerer waterfall and wait for the user's answer.
  *
  * When a caller supplies an agent, human interaction is valid only for the
- * exact live runtime root. Runtime ownership, not durable session lineage,
- * decides this boundary: an owned child has no human answerer and would
- * block forever, while a lineage-bearing session resumed as a new runtime
- * root may ask normally.
+ * exact live instance of an ordinary Session. Explicit subagent origin
+ * rejects delegated callers; historical ordinary forks may retain parent
+ * metadata and still ask normally.
  *
  * @param request Questions, owner agent, and abort signal.
  * @returns The answer chosen or typed by the human.
  * @throws {UserQuestionError} code `ASK_ABORTED` when the supplied signal
  *   is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent
- *   is not the registry's exact live instance, or `DELEGATED_CALLER` when
- *   that live agent is owned by another agent.
+ *   is not the registry's exact live instance, `DELEGATED_CALLER` when
+ *   that live agent has subagent origin, or `PROVIDER_ERROR`, keeping the
+ *   original message, when an answerer fails with a value that is not a
+ *   `HarnessError`; a coded `HarnessError` from an answerer keeps its `name`
+ *   and `code`.
  */
 async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>
 ```
