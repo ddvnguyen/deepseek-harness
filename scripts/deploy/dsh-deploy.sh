@@ -384,7 +384,11 @@ fi
 log "rehearsal boot on a random free port with a scratch DSH_HOME"
 rm -rf "$SCRATCH"; mkdir -p "$SCRATCH/home/profiles/web" "$SCRATCH/state"
 if [ -f "$STATE_HOME/state.json" ] || [ -d "$STATE_HOME/profiles" ]; then
-  cp -a "$STATE_HOME"/. "$SCRATCH/home"/ 2>/dev/null || true
+  # The lane HOME carries root-owned podman storage (.local/share/containers)
+  # that can neither be copied faithfully nor removed by this script (M-377:
+  # run 43736917312 died here under set -e). The rehearsal boots the lane's
+  # profile tree, not its containers, so exclude that subtree at copy time.
+  tar -cf - --exclude='./.local/share/containers' -C "$STATE_HOME" . 2>/dev/null | tar -xf - -C "$SCRATCH/home"/ 2>/dev/null || true
 fi
 rm -rf "$SCRATCH/home/profiles/web/node_modules"
 # The rehearsal boots the lane's own profile tree, so the profile's node_modules
